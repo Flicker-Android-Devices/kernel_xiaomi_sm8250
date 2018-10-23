@@ -2692,8 +2692,8 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	if (rto_delta_us > 0)
 		timeout = min_t(u32, timeout, usecs_to_jiffies(rto_delta_us));
 
-	inet_csk_reset_xmit_timer(sk, ICSK_TIME_LOSS_PROBE, timeout,
-				  TCP_RTO_MAX);
+	tcp_reset_xmit_timer(sk, ICSK_TIME_LOSS_PROBE, timeout,
+			     TCP_RTO_MAX, NULL);
 	return true;
 }
 
@@ -3277,9 +3277,10 @@ void tcp_xmit_retransmit_queue(struct sock *sk)
 
 		if (skb == rtx_head &&
 		    icsk->icsk_pending != ICSK_TIME_REO_TIMEOUT)
-			inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
-						  inet_csk(sk)->icsk_rto,
-						  TCP_RTO_MAX);
+			tcp_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
+					     inet_csk(sk)->icsk_rto,
+					     TCP_RTO_MAX,
+					     skb);
 	}
 }
 
@@ -4023,9 +4024,10 @@ void tcp_send_probe0(struct sock *sk)
 			icsk->icsk_probes_out = 1;
 		probe_max = TCP_RESOURCE_PROBE_INTERVAL;
 	}
-	inet_csk_reset_xmit_timer(sk, ICSK_TIME_PROBE0,
-				  tcp_probe0_when(sk, probe_max),
-				  TCP_RTO_MAX);
+	tcp_reset_xmit_timer(sk, ICSK_TIME_PROBE0,
+			     tcp_probe0_when(sk, probe_max),
+			     TCP_RTO_MAX,
+			     NULL);
 }
 
 int tcp_rtx_synack(const struct sock *sk, struct request_sock *req)
