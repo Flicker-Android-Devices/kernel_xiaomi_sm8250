@@ -8092,7 +8092,8 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	cpumask_t *candidates;
 	bool is_rtg, curr_is_rtg;
 	struct find_best_target_env fbt_env;
-	bool need_idle = wake_to_idle(p);
+	bool latency_sensitive = uclamp_latency_sensitive(p);
+	bool need_idle = wake_to_idle(p) || latency_sensitive;
 	int placement_boost = task_boost_policy(p);
 	u64 start_t = 0;
 	int delta = 0;
@@ -8102,7 +8103,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	bool prefer_high_cap = schedtune_prefer_high_cap(p);
 #else
 	int boosted = (uclamp_boosted(p) > 0) || (task_boost > 0);
-	bool prefer_high_cap = boosted;
+	bool prefer_high_cap = boosted || (latency_sensitive && uclamp_boosted(p));
 #endif
 	int start_cpu;
 
@@ -8173,7 +8174,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	/* Bail out if no candidate was found. */
 	weight = cpumask_weight(candidates);
 	if (!weight) {
-		if (schedtune_prefer_high_cap(p))
+		if (prefer_high_cap)
 			/*
 			 * Now let the search in
 			 * select_task_rq_fair continue.
