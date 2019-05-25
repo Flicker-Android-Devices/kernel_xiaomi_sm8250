@@ -5816,7 +5816,6 @@ static inline bool is_sched_lib_based_app(pid_t pid)
 	char *tmp_lib_name;
 	bool found = false;
 	struct task_struct *p;
-	struct mm_struct *mm;
 
 	if (strnlen(sched_lib_name, LIB_PATH_LENGTH) == 0)
 		return false;
@@ -5838,12 +5837,11 @@ static inline bool is_sched_lib_based_app(pid_t pid)
 	get_task_struct(p);
 	rcu_read_unlock();
 
-	mm = get_task_mm(p);
-	if (!mm)
+	if (!p->mm)
 		goto put_task_struct;
 
-	mmap_read_lock(mm);
-	for (vma = mm->mmap; vma ; vma = vma->vm_next) {
+	mmap_read_lock(p->mm);
+	for (vma = p->mm->mmap; vma ; vma = vma->vm_next) {
 		if (vma->vm_file && vma->vm_flags & VM_EXEC) {
 			name = d_path(&vma->vm_file->f_path,
 					path_buf, LIB_PATH_LENGTH);
@@ -5864,8 +5862,7 @@ static inline bool is_sched_lib_based_app(pid_t pid)
 	}
 
 release_sem:
-	mmap_read_unlock(mm);
-	mmput(mm);
+	mmap_read_unlock(p->mm);
 put_task_struct:
 	put_task_struct(p);
 	kfree(tmp_lib_name);
