@@ -8131,6 +8131,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 		sync = 0;
 
 	if (sysctl_sched_sync_hint_enable && sync &&
+				(cpu_rq(cpu)->nr_running <= 1) &&
 				bias_to_this_cpu(p, cpu, start_cpu)) {
 		best_energy_cpu = cpu;
 		fbt_env.fastpath = SYNC_WAKEUP;
