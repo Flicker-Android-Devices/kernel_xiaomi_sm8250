@@ -33,6 +33,7 @@
 #include <linux/cpu_cooling.h>
 #include <linux/energy_model.h>
 #include <linux/of_device.h>
+#include <linux/sched/topology.h>
 
 #include <trace/events/thermal.h>
 
@@ -442,6 +443,15 @@ static int cpufreq_set_cur_state(struct thermal_cooling_device *cdev,
 	clip_freq = get_state_freq(cpufreq_cdev, state);
 	cpufreq_cdev->cpufreq_state = state;
 	cpufreq_cdev->clipped_freq = clip_freq;
+
+	/* Update thermal pressure in case of maximum frequency capping */
+	{
+		struct cpumask *cpus = cpufreq_cdev->policy->cpus;
+		unsigned long max_capacity = arch_scale_cpu_capacity(NULL, cpumask_first(cpus));
+		unsigned long capacity = (clip_freq * max_capacity) / cpufreq_cdev->policy->cpuinfo.max_freq;
+
+		arch_set_thermal_pressure(cpus, max_capacity - min(capacity, max_capacity));
+	}
 
 	/* Check if the device has a platform mitigation function that
 	 * can handle the CPU freq mitigation, if not, notify cpufreq
