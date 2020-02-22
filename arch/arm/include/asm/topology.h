@@ -37,6 +37,10 @@ const struct cpumask *cpu_coregroup_mask(int cpu);
 /* Replace task scheduler's default cpu-invariant accounting */
 #define arch_scale_cpu_capacity topology_get_cpu_scale
 
+/* Replace task scheduler's default thermal pressure API */
+#define arch_scale_thermal_pressure topology_get_thermal_pressure
+#define arch_set_thermal_pressure   topology_set_thermal_pressure
+
 /* Enable topology flag updates */
 #define arch_update_cpu_topology topology_update_cpu_topology
 
