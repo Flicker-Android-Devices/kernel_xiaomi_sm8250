@@ -1034,6 +1034,28 @@ TRACE_EVENT(sched_load_rt_rq,
 		  __entry->util)
 );
 
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+TRACE_EVENT(sched_load_thermal_rq,
+
+	TP_PROTO(struct rq *rq),
+
+	TP_ARGS(rq),
+
+	TP_STRUCT__entry(
+		__field(	int,		cpu			)
+		__field(	unsigned long,	load			)
+	),
+
+	TP_fast_assign(
+		__entry->cpu	= rq->cpu;
+		__entry->load	= rq->avg_thermal.load_avg;
+	),
+
+	TP_printk("cpu=%d load=%lu", __entry->cpu,
+		  __entry->load)
+);
+#endif
+
 #ifdef CONFIG_SCHED_WALT
 extern unsigned int sched_ravg_window;
 #endif
