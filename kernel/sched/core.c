@@ -3896,6 +3896,8 @@ void scheduler_tick(void)
 	wallclock = sched_ktime_clock();
 	update_task_ravg(rq->curr, rq, TASK_UPDATE, wallclock, 0);
 	update_rq_clock(rq);
+	update_thermal_load_avg(rq_clock_task(rq), rq,
+				arch_scale_thermal_pressure(cpu_of(rq)));
 	curr->sched_class->task_tick(rq, curr, 0);
 	cpu_load_update_active(rq);
 	calc_global_load_tick(rq);
