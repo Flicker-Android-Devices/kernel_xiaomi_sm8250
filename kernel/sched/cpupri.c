@@ -82,6 +82,29 @@ drop_nopreempt_cpus(struct cpumask *lowest_mask)
  * Return: (int)bool - CPUs were found
  */
 int cpupri_find(struct cpupri *cp, struct task_struct *p,
+		struct cpumask *lowest_mask)
+{
+	return cpupri_find_fitness(cp, p, lowest_mask, NULL);
+}
+
+/**
+ * cpupri_find_fitness - find the best (lowest-pri) CPU in the system
+ * @cp: The cpupri context
+ * @p: The task
+ * @lowest_mask: A mask to fill in with selected CPUs (or NULL)
+ * @fitness_fn: A pointer to a function to do custom checks whether the CPU
+ *              fits a specific criteria so that we only return those CPUs.
+ *
+ * Note: This function returns the recommended CPUs as calculated during the
+ * current invocation.  By the time the call returns, the CPUs may have in
+ * fact changed priorities any number of times.  While not ideal, it is not
+ * an issue of correctness since the normal rebalancer logic will correct
+ * any discrepancies created by racing against the uncertainty of the current
+ * priority configuration.
+ *
+ * Return: (int)bool - CPUs were found
+ */
+int cpupri_find_fitness(struct cpupri *cp, struct task_struct *p,
 		struct cpumask *lowest_mask,
 		bool (*fitness_fn)(struct task_struct *p, int cpu))
 {

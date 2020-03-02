@@ -1647,7 +1647,7 @@ static void check_preempt_equal_prio(struct rq *rq, struct task_struct *p)
 	 * let's hope p can move out.
 	 */
 	if (rq->curr->nr_cpus_allowed == 1 ||
-	    !cpupri_find(&rq->rd->cpupri, rq->curr, NULL, NULL))
+	    !cpupri_find(&rq->rd->cpupri, rq->curr, NULL))
 		return;
 
 	/*
@@ -1655,7 +1655,7 @@ static void check_preempt_equal_prio(struct rq *rq, struct task_struct *p)
 	 * see if it is pushed or pulled somewhere else.
 	 */
 	if (p->nr_cpus_allowed != 1
-	    && cpupri_find(&rq->rd->cpupri, p, NULL, NULL))
+	    && cpupri_find(&rq->rd->cpupri, p, NULL))
 		return;
 
 	/*
@@ -1960,15 +1960,33 @@ static int find_lowest_rq(struct task_struct *task)
 		return -1; /* No other targets possible */
 
 #ifdef CONFIG_SCHED_WALT
-	if (!cpupri_find(&task_rq(task)->rd->cpupri, task, lowest_mask, NULL))
+	if (!cpupri_find(&task_rq(task)->rd->cpupri, task, lowest_mask))
 		return -1; /* No targets found */
 
 	if (static_branch_unlikely(&sched_energy_present))
 		cpu = rt_energy_aware_wake_cpu(task);
 #else
-	if (!cpupri_find(&task_rq(task)->rd->cpupri, task, lowest_mask,
-			 rt_task_fits_capacity))
-		return -1; /* No targets found */
+	{
+		int ret;
+
+		/*
+		 * If we're on asym system ensure we consider the different capacities
+		 * of the CPUs when searching for the lowest_mask.
+		 */
+		if (static_branch_unlikely(&sched_asym_cpucapacity)) {
+
+			ret = cpupri_find_fitness(&task_rq(task)->rd->cpupri,
+						  task, lowest_mask,
+						  rt_task_fits_capacity);
+		} else {
+
+			ret = cpupri_find(&task_rq(task)->rd->cpupri,
+					  task, lowest_mask);
+		}
+
+		if (!ret)
+			return -1; /* No targets found */
+	}
 #endif
 
 	if (cpu == -1)
