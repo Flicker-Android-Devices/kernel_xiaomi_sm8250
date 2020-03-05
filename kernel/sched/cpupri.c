@@ -194,6 +194,27 @@ retry:
 		drop_nopreempts = false;
 		goto retry;
 	}
+
+	/*
+	 * If we failed to find a fitting lowest_mask, kick off a new search
+	 * but without taking into account any fitness criteria this time.
+	 *
+	 * This rule favours honouring priority over fitting the task in the
+	 * correct CPU (Capacity Awareness being the only user now).
+	 * The idea is that if a higher priority task can run, then it should
+	 * run even if this ends up being on unfitting CPU.
+	 *
+	 * The cost of this trade-off is not entirely clear and will probably
+	 * be good for some workloads and bad for others.
+	 *
+	 * The main idea here is that if some CPUs were overcommitted, we try
+	 * to spread which is what the scheduler traditionally did. Sys admins
+	 * must do proper RT planning to avoid overloading the system if they
+	 * really care.
+	 */
+	if (fitness_fn)
+		return cpupri_find(cp, p, lowest_mask);
+
 	return 0;
 }
 
