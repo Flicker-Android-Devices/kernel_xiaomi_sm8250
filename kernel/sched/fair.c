@@ -7394,6 +7394,12 @@ static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 				}
 
 				/*
+				 * Skip searching for active CPU for tasks have
+				 * high priority & prefer_high_cap.
+				 */
+				if (prioritized_task)
+					continue;
+				/*
 				 * Case A.2: Target ACTIVE CPU
 				 * Favor CPUs with max spare capacity.
 				 */
@@ -7650,8 +7656,10 @@ static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 		: best_idle_cpu;
 
 	if (target_cpu == -1 && most_spare_cap_cpu != -1 &&
-		/* ensure we use active cpu for active migration */
-		!(p->state == TASK_RUNNING && !idle_cpu(most_spare_cap_cpu)))
+	    /* ensure we use active cpu for active migration */
+	    !(p->state == TASK_RUNNING && !idle_cpu(most_spare_cap_cpu)) &&
+		/* do not pick an overutilized most_spare_cap_cpu */
+		!cpu_overutilized(most_spare_cap_cpu))
 		target_cpu = most_spare_cap_cpu;
 
 	if (target_cpu == -1 && isolated_candidate != -1 &&
@@ -8102,6 +8110,13 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	/* Bail out if no candidate was found. */
 	weight = cpumask_weight(candidates);
 	if (!weight) {
+		if (schedtune_prefer_high_cap(p))
+			/*
+			 * Now let the search in
+			 * select_task_rq_fair continue.
+			 */
+			goto fail;
+
 		/*
 		 * Don't overload the previous CPU if it had already
 		 * more runnable tasks. Fallback to a CPU with lower
@@ -8122,7 +8137,6 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 		}
 		goto unlock;
 	}
-
 	/* If there is only one sensible candidate, select it now. */
 	cpu = cpumask_first(candidates);
 	if (weight == 1 && ((uclamp_latency_sensitive(p) && idle_cpu(cpu)) ||
