@@ -52,6 +52,8 @@ static const struct of_device_id dsi_display_dt_match[] = {
 	{}
 };
 
+struct dsi_display *primary_display;
+
 static void dsi_display_mask_ctrl_error_interrupts(struct dsi_display *display,
 			u32 mask, bool enable)
 {
@@ -6938,6 +6940,8 @@ int dsi_display_get_modes(struct dsi_display *display,
 exit:
 	*out_modes = display->modes;
 	rc = 0;
+	if (display->is_prim_display)
+		primary_display = display;
 
 error:
 	if (rc)
@@ -8572,5 +8576,10 @@ module_param_string(dsi_display1, dsi_display_secondary, MAX_CMDLINE_PARAM_LEN,
 								0600);
 MODULE_PARM_DESC(dsi_display1,
 	"msm_drm.dsi_display1=<display node>:<configX> where <display node> is 'secondary dsi display node name' and <configX> where x represents index in the topology list");
+struct dsi_display *get_main_display(void)
+{
+	return primary_display;
+}
+
 module_init(dsi_display_register);
 module_exit(dsi_display_unregister);
