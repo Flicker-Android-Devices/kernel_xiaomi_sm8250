@@ -3357,6 +3357,18 @@ static void _sde_plane_atomic_disable(struct drm_plane *plane,
 				SDE_SSPP_RECT_SOLO, SDE_SSPP_MULTIRECT_NONE);
 }
 
+int sde_plane_is_fod_layer(const struct drm_plane_state *drm_state)
+{
+	struct sde_plane_state *pstate;
+
+	if (!drm_state)
+		return 0;
+
+	pstate = to_sde_plane_state(drm_state);
+
+	return sde_plane_get_property(pstate, PLANE_PROP_FOD);
+}
+
 static void sde_plane_atomic_update(struct drm_plane *plane,
 				struct drm_plane_state *old_state)
 {
@@ -3590,7 +3602,10 @@ static void _sde_plane_install_properties(struct drm_plane *plane,
 		0x0, 0, U32_MAX, 0, PLANE_PROP_MI_LAYER_INFO);
 
 	msm_property_install_range(&psde->property_info, "zpos",
-		0x0, 0, zpos_max, zpos_def, PLANE_PROP_ZPOS);
+		0x0, 0, INT_MAX, 0, PLANE_PROP_ZPOS);
+
+	msm_property_install_range(&psde->property_info, "fod",
+		0x0, 0, INT_MAX, 0, PLANE_PROP_FOD);
 
 	msm_property_install_range(&psde->property_info, "alpha",
 		0x0, 0, 255, 255, PLANE_PROP_ALPHA);
@@ -4023,11 +4038,35 @@ static int sde_plane_atomic_set_property(struct drm_plane *plane,
 		SDE_ERROR_PLANE(psde, "invalid state\n");
 	} else {
 		pstate = to_sde_plane_state(state);
+		idx = msm_property_index(&psde->property_info,
+				property);
+		if (idx == PLANE_PROP_ZPOS) {
+			struct drm_property *fod_property;
+			struct drm_property *mi_prop;
+			uint64_t fod_val = 0;
+
+			if (val & FOD_PRESSED_LAYER_ZORDER) {
+				val &= ~FOD_PRESSED_LAYER_ZORDER;
+				fod_val = 1;
+			}
+
+			fod_property = psde->property_info.
+					property_array[PLANE_PROP_FOD];
+			ret = msm_property_atomic_set(&psde->property_info,
+					&pstate->property_state,
+					fod_property, fod_val);
+			if (ret)
+				SDE_ERROR("failed to set fod prop\n");
+
+			mi_prop = psde->property_info.
+					property_array[PLANE_PROP_MI_LAYER_INFO];
+			msm_property_atomic_set(&psde->property_info,
+					&pstate->property_state,
+					mi_prop, fod_val ? MI_LAYER_FOD_HBM_OVERLAY : 0);
+		}
 		ret = msm_property_atomic_set(&psde->property_info,
 				&pstate->property_state, property, val);
 		if (!ret) {
-			idx = msm_property_index(&psde->property_info,
-					property);
 			switch (idx) {
 			case PLANE_PROP_INPUT_FENCE:
 				_sde_plane_set_input_fence(psde, pstate, val);
