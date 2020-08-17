@@ -372,4 +372,5 @@ int dsi_panel_tx_cmd_set(struct dsi_panel *panel,
 				enum dsi_cmd_set_type type);
 int dsi_panel_update_backlight(struct dsi_panel *panel,
 				u32 bl_lvl);
+u32 dsi_panel_get_backlight(struct dsi_panel *panel);
 #endif /* _DSI_PANEL_H_ */
