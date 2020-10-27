@@ -1007,6 +1007,10 @@ static inline int build_open_flags(const struct open_how *how,
 	if (how->resolve & ~VALID_RESOLVE_FLAGS)
 		return -EINVAL;
 
+	/* Scoping flags are mutually exclusive. */
+	if ((how->resolve & RESOLVE_BENEATH) && (how->resolve & RESOLVE_IN_ROOT))
+		return -EINVAL;
+
 	/* Deal with the mode. */
 	if (WILL_CREATE(flags)) {
 		if (how->mode & ~S_IALLUGO)
