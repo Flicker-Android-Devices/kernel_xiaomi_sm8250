@@ -4026,17 +4026,6 @@ static inline bool cpu_is_in_target_set(struct task_struct *p, int cpu)
 	return cpu >= next_usable_cpu || next_usable_cpu >= nr_cpu_ids;
 }
 
-static inline bool
-bias_to_this_cpu(struct task_struct *p, int cpu, int start_cpu)
-{
-	bool base_test = cpumask_test_cpu(cpu, &p->cpus_allowed) &&
-			cpu_active(cpu) && cpu_is_in_target_set(p, cpu);
-	bool start_cap_test = (capacity_orig_of(cpu) >=
-					capacity_orig_of(start_cpu));
-
-	return base_test && start_cap_test;
-}
-
 static inline bool task_fits_capacity(struct task_struct *p,
 					long capacity,
 					int cpu)
@@ -4061,6 +4050,18 @@ static inline bool task_fits_capacity(struct task_struct *p,
 			sched_capacity_margin_up[task_cpu(p)];
 
 	return capacity * 1024 > uclamp_task(p) * margin;
+}
+
+static inline bool
+bias_to_this_cpu(struct task_struct *p, int cpu, int start_cpu)
+{
+	bool base_test = cpumask_test_cpu(cpu, &p->cpus_allowed) &&
+			cpu_active(cpu) && cpu_is_in_target_set(p, cpu);
+	bool start_cap_test = (capacity_orig_of(cpu) >=
+					capacity_orig_of(start_cpu));
+	bool fits_cap_test = task_fits_capacity(p, capacity_of(cpu), cpu);
+
+	return base_test && start_cap_test && fits_cap_test;
 }
 
 static inline bool task_fits_max(struct task_struct *p, int cpu)
