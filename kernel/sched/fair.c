@@ -8154,6 +8154,8 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	candidates = this_cpu_ptr(&energy_cpus);
 	cpumask_clear(candidates);
 
+	sync_entity_load_avg(&p->se);
+
 	if (sync && (need_idle || (is_rtg && curr_is_rtg)))
 		sync = 0;
 
@@ -8179,8 +8181,6 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 		sd = sd->parent;
 	if (!sd)
 		goto fail;
-
-	sync_entity_load_avg(&p->se);
 
 	if (sched_feat(FIND_BEST_TARGET)) {
 		fbt_env.is_rtg = is_rtg;
