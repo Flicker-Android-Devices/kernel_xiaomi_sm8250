@@ -307,6 +307,21 @@ void blk_recalc_rq_segments(struct request *rq)
 	bool no_sg_merge = !!test_bit(QUEUE_FLAG_NO_SG_MERGE,
 			&rq->q->queue_flags);
 
+	if (rq->bio && (bio_op(rq->bio) == REQ_OP_DISCARD ||
+			bio_op(rq->bio) == REQ_OP_SECURE_ERASE)) {
+		struct bio *bio = rq->bio;
+		unsigned int nr_phys_segs = 0;
+
+		if (queue_max_discard_segments(rq->q) > 1) {
+			for_each_bio(bio)
+				nr_phys_segs++;
+		} else {
+			nr_phys_segs = 1;
+		}
+		rq->nr_phys_segments = nr_phys_segs;
+		return;
+	}
+
 	rq->nr_phys_segments = __blk_recalc_rq_segments(rq->q, rq->bio,
 			no_sg_merge);
 }
