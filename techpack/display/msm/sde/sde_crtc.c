@@ -6636,6 +6636,11 @@ static void __sde_crtc_idle_notify_work_cmd_mode(struct kthread_work *work)
 /*
  * __sde_crtc_early_wakeup_work - trigger early wakeup from user space
  */
+#if !defined(CONFIG_MACH_XIAOMI_APOLLO) && \
+    !defined(CONFIG_MACH_XIAOMI_DAGU) && \
+    !defined(CONFIG_MACH_XIAOMI_ELISH) && \
+    !defined(CONFIG_MACH_XIAOMI_ENUMA) && \
+    !defined(CONFIG_MACH_XIAOMI_PIPA)
 static void __sde_crtc_early_wakeup_work(struct kthread_work *work)
 {
 	struct sde_crtc *sde_crtc = container_of(work, struct sde_crtc,
@@ -6666,6 +6671,7 @@ static void __sde_crtc_early_wakeup_work(struct kthread_work *work)
 	sde_kms = to_sde_kms(priv->kms);
 	sde_kms_trigger_early_wakeup(sde_kms, crtc);
 }
+#endif
 
 /* initialize crtc */
 struct drm_crtc *sde_crtc_init(struct drm_device *dev, struct drm_plane *plane)
@@ -6761,8 +6767,14 @@ struct drm_crtc *sde_crtc_init(struct drm_device *dev, struct drm_plane *plane)
 					__sde_crtc_idle_notify_work);
 	kthread_init_delayed_work(&sde_crtc->idle_notify_work_cmd_mode,
 					__sde_crtc_idle_notify_work_cmd_mode);
+#if !defined(CONFIG_MACH_XIAOMI_APOLLO) && \
+    !defined(CONFIG_MACH_XIAOMI_DAGU) && \
+    !defined(CONFIG_MACH_XIAOMI_ELISH) && \
+    !defined(CONFIG_MACH_XIAOMI_ENUMA) && \
+    !defined(CONFIG_MACH_XIAOMI_PIPA)
 	kthread_init_work(&sde_crtc->early_wakeup_work,
 					__sde_crtc_early_wakeup_work);
+#endif
 
 	SDE_DEBUG("crtc=%d new_llcc=%d, old_llcc=%d\n",
 		crtc->base.id,
