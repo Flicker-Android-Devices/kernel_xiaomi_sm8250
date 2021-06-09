@@ -6,6 +6,7 @@
 #include <linux/blk_types.h>
 #include <linux/atomic.h>
 #include <linux/wait.h>
+#include <linux/blk-mq.h>
 
 enum rq_qos_id {
 	RQ_QOS_WBT,
@@ -72,22 +73,54 @@ static inline void rq_wait_init(struct rq_wait *rq_wait)
 	init_waitqueue_head(&rq_wait->wait);
 }
 
+static inline void rq_qos_freeze_queue(struct request_queue *q)
+{
+	if (q->mq_ops || q->request_fn) {
+		blk_mq_freeze_queue(q);
+	} else {
+		/*
+		 * During allocation the driver and blk-throtl are not ready.
+		 * Freeze usage without entering the legacy drain path.
+		 */
+		blk_freeze_queue_start(q);
+		blk_mq_freeze_queue_wait(q);
+	}
+}
+
 static inline void rq_qos_add(struct request_queue *q, struct rq_qos *rqos)
 {
+	/*
+	 * No IO can be in-flight when adding rqos, so freeze the queue.
+	 * Reuse ->queue_lock to serialize concurrent rq_qos additions
+	 * and deletions.
+	 */
+	rq_qos_freeze_queue(q);
+
+	spin_lock_irq(q->queue_lock);
 	rqos->next = q->rq_qos;
 	q->rq_qos = rqos;
+	spin_unlock_irq(q->queue_lock);
+
+	blk_mq_unfreeze_queue(q);
 }
 
 static inline void rq_qos_del(struct request_queue *q, struct rq_qos *rqos)
 {
 	struct rq_qos **cur;
 
+	/* See rq_qos_add() about freezing the queue and ->queue_lock. */
+	rq_qos_freeze_queue(q);
+
+	spin_lock_irq(q->queue_lock);
 	for (cur = &q->rq_qos; *cur; cur = &(*cur)->next) {
 		if (*cur == rqos) {
 			*cur = rqos->next;
 			break;
 		}
 	}
+	spin_unlock_irq(q->queue_lock);
+
+	blk_mq_unfreeze_queue(q);
 }
 
 bool rq_wait_inc_below(struct rq_wait *rq_wait, unsigned int limit);
