@@ -481,19 +481,30 @@ int blk_rq_map_sg(struct request_queue *q, struct request *rq,
 }
 EXPORT_SYMBOL(blk_rq_map_sg);
 
+static inline unsigned int blk_rq_get_max_segments(struct request *rq)
+{
+	if (req_op(rq) == REQ_OP_DISCARD)
+		return queue_max_discard_segments(rq->q);
+	return queue_max_segments(rq->q);
+}
+
 static inline int ll_new_hw_segment(struct request_queue *q,
 				    struct request *req,
 				    struct bio *bio)
 {
 	int nr_phys_segs = bio_phys_segments(q, bio);
 
-	if (req->nr_phys_segments + nr_phys_segs > queue_max_segments(q))
-		goto no_merge;
-
 	if (!blk_cgroup_mergeable(req, bio))
 		goto no_merge;
 
 	if (blk_integrity_merge_bio(q, req, bio) == false)
+		goto no_merge;
+
+	/* discard request merge won't add new segment */
+	if (req_op(req) == REQ_OP_DISCARD)
+		return 1;
+
+	if (req->nr_phys_segments + nr_phys_segs > blk_rq_get_max_segments(req))
 		goto no_merge;
 
 	/*
@@ -569,15 +580,16 @@ static bool req_no_special_merge(struct request *req)
 static bool req_attempt_discard_merge(struct request_queue *q, struct request *req,
 		struct request *next)
 {
-	unsigned short segments = blk_rq_nr_discard_segments(req);
+	unsigned int segments = blk_rq_nr_discard_segments(req) +
+				blk_rq_nr_discard_segments(next);
 
-	if (segments >= queue_max_discard_segments(q))
+	if (segments > queue_max_discard_segments(q))
 		goto no_merge;
-	if (blk_rq_sectors(req) + bio_sectors(next->bio) >
+	if (blk_rq_sectors(req) + blk_rq_sectors(next) >
 	    blk_rq_get_max_sectors(req, blk_rq_pos(req)))
 		goto no_merge;
 
-	req->nr_phys_segments = segments + blk_rq_nr_discard_segments(next);
+	req->nr_phys_segments = segments;
 	return true;
 no_merge:
 	req_set_nomerge(q, req);
@@ -617,7 +629,7 @@ static int ll_merge_requests_fn(struct request_queue *q, struct request *req,
 		total_phys_segments--;
 	}
 
-	if (total_phys_segments > queue_max_segments(q))
+	if (total_phys_segments > blk_rq_get_max_segments(req))
 		return 0;
 
 	if (!blk_cgroup_mergeable(req, next->bio))
@@ -680,6 +692,17 @@ static void blk_account_io_merge(struct request *req)
 	}
 }
 
+static enum elv_merge blk_try_req_merge(struct request *req,
+				       struct request *next)
+{
+	if (blk_discard_mergable(req))
+		return ELEVATOR_DISCARD_MERGE;
+	else if (blk_rq_pos(req) + blk_rq_sectors(req) == blk_rq_pos(next))
+		return ELEVATOR_BACK_MERGE;
+
+	return ELEVATOR_NO_MERGE;
+}
+
 /*
  * For non-mq, this has to be called with the request spinlock acquired.
  * For mq with scheduling, the appropriate queue wide lock should be held.
@@ -694,12 +717,6 @@ static struct request *attempt_merge(struct request_queue *q,
 		return NULL;
 
 	if (req_op(req) != req_op(next))
-		return NULL;
-
-	/*
-	 * not contiguous
-	 */
-	if (blk_rq_pos(req) + blk_rq_sectors(req) != blk_rq_pos(next))
 		return NULL;
 
 	if (rq_data_dir(req) != rq_data_dir(next)
@@ -725,11 +742,18 @@ static struct request *attempt_merge(struct request_queue *q,
 	 * counts here. Handle DISCARDs separately, as they
 	 * have separate settings.
 	 */
-	if (req_op(req) == REQ_OP_DISCARD) {
+	switch (blk_try_req_merge(req, next)) {
+	case ELEVATOR_DISCARD_MERGE:
 		if (!req_attempt_discard_merge(q, req, next))
 			return NULL;
-	} else if (!ll_merge_requests_fn(q, req, next))
+		break;
+	case ELEVATOR_BACK_MERGE:
+		if (!ll_merge_requests_fn(q, req, next))
+			return NULL;
+		break;
+	default:
 		return NULL;
+	}
 
 	/*
 	 * If failfast settings disagree or any of the two is already
@@ -757,8 +781,7 @@ static struct request *attempt_merge(struct request_queue *q,
 
 	req->__data_len += blk_rq_bytes(next);
 
-	if (req_op(req) != REQ_OP_DISCARD)
-		elv_merge_requests(q, req, next);
+	elv_merge_requests(q, req, next);
 
 	/*
 	 * 'next' is going away, so update stats accordingly
@@ -861,8 +884,7 @@ bool blk_rq_merge_ok(struct request *rq, struct bio *bio)
 
 enum elv_merge blk_try_merge(struct request *rq, struct bio *bio)
 {
-	if (req_op(rq) == REQ_OP_DISCARD &&
-	    queue_max_discard_segments(rq->q) > 1)
+	if (blk_discard_mergable(rq))
 		return ELEVATOR_DISCARD_MERGE;
 	else if (blk_rq_pos(rq) + blk_rq_sectors(rq) == bio->bi_iter.bi_sector)
 		return ELEVATOR_BACK_MERGE;
