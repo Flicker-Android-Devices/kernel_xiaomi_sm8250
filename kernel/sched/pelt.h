@@ -43,6 +43,8 @@ static inline void cfs_se_util_change(struct sched_avg *avg)
 	WRITE_ONCE(avg->util_est.enqueued, enqueued);
 }
 
+#define PELT_MIN_DIVIDER	(LOAD_AVG_MAX - 1024)
+
 extern unsigned int sched_pelt_lshift;
 
 /*
