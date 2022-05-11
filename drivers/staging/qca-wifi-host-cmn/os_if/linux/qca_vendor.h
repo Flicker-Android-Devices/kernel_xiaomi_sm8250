@@ -655,6 +655,8 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_DRIVER_DISCONNECT_REASON = 189,
 	QCA_NL80211_VENDOR_SUBCMD_CONFIG_TWT = 191,
 	QCA_NL80211_VENDOR_SUBCMD_GETBAND = 192,
+	/* 193..212 - reserved for QCA */
+	QCA_NL80211_VENDOR_SUBCMD_GET_RADIO_COMBINATION_MATRIX = 213,
 };
 
 enum qca_wlan_vendor_tos {
@@ -9485,5 +9487,68 @@ enum qca_wlan_vendor_attr_driver_disconnect_reason {
 	QCA_WLAN_VENDOR_ATTR_DRIVER_DISCONNECT_REASON_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_DRIVER_DISCONNECT_REASON_MAX =
 	QCA_WLAN_VENDOR_ATTR_DRIVER_DISCONNECT_REASON_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_supported_radio_cfg - Attributes for
+ * radio configurations present in each radio combination.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_BAND: u32 attribute indicates
+ * the band info in the radio configuration. Uses the enum qca_set_band values.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_ANTENNA: u8 attribute indicates
+ * the number of antennas info in the radio configuration.
+ */
+enum qca_wlan_vendor_attr_supported_radio_cfg {
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_BAND = 1,
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_ANTENNA = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_LAST,
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_MAX =
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_radio_combination - Attributes for
+ * radio combinations supported by the device.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_CFGS: Nested attribute
+ * provides the radio configurations present in the radio combination.
+ * Uses the enum qca_wlan_vendor_attr_supported_radio_cfg attributes.
+ * This attribute provides the values for radio combination matrix.
+ * For standalone config, the number of config values is one and the config
+ * carries the band and antenna information for standalone configuration. For
+ * Dual Band Simultaneous (DBS)/Single Band Simultaneous (SBS) mode
+ * configuration the number of config values is two and the config carries the
+ * band and antenna information for each simultaneous radio.
+ */
+enum qca_wlan_vendor_attr_radio_combination {
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_CFGS = 1,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_LAST,
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_MAX =
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_radio_combination_matrix - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_GET_RADIO_COMBINATION_MATRIX
+ *
+ * @QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_SUPPORTED_CFGS: Nested attribute
+ * provides the radio combinations supported by the device.
+ * Uses the enum qca_wlan_vendor_attr_radio_combination attributes.
+ */
+enum qca_wlan_vendor_attr_radio_combination_matrix {
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_SUPPORTED_CFGS = 1,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_LAST,
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_MAX =
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_LAST - 1,
 };
 #endif
