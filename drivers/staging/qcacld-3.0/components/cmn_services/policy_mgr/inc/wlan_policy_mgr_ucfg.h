@@ -20,6 +20,7 @@
 #include "wlan_objmgr_psoc_obj.h"
 #include "wlan_objmgr_global_obj.h"
 #include "qdf_status.h"
+#include "wlan_policy_mgr_public_struct.h"
 
 
 /**
@@ -61,6 +62,24 @@ QDF_STATUS ucfg_policy_mgr_get_mcc_scc_switch(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 #endif //FEATURE_WLAN_MCC_TO_SCC_SWITCH
+
+/**
+ * ucfg_policy_mgr_get_radio_combinations() - Query the supported radio
+ * combinations
+ * @psoc: soc object
+ * @comb: combination buffer
+ * @comb_max: max combination number can be saved to comb buffer
+ * @comb_num: returned combination number
+ *
+ * This function returns the radio combination information supported by target.
+ *
+ * Return: QDF_STATUS_SUCCESS if query successfully
+ */
+QDF_STATUS
+ucfg_policy_mgr_get_radio_combinations(struct wlan_objmgr_psoc *psoc,
+				       struct radio_combination *comb,
+				       uint32_t comb_max,
+				       uint32_t *comb_num);
 /**
  * ucfg_policy_mgr_get_sys_pref() - to get system preference
  * @psoc: pointer to psoc
