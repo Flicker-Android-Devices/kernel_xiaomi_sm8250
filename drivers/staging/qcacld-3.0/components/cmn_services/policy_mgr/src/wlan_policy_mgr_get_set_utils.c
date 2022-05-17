@@ -508,6 +508,8 @@ static void policy_mgr_get_hw_mode_params(
 		struct wlan_psoc_host_mac_phy_caps *caps,
 		struct policy_mgr_mac_ss_bw_info *info)
 {
+	uint32_t max_5g_freq;
+
 	if (!caps) {
 		policy_mgr_err("Invalid capabilities");
 		return;
@@ -523,6 +525,17 @@ static void policy_mgr_get_hw_mode_params(
 		QDF_MAX(caps->max_bw_supported_2G,
 		caps->max_bw_supported_5G));
 	info->mac_band_cap = caps->supported_bands;
+
+	if (caps->supported_bands & WMI_HOST_WLAN_5G_CAPABILITY) {
+		max_5g_freq = wlan_reg_max_6ghz_chan_freq() ?
+				wlan_reg_max_6ghz_chan_freq() :
+				wlan_reg_max_5ghz_chan_freq();
+		max_5g_freq = caps->reg_cap_ext.high_5ghz_chan ?
+				QDF_MIN(caps->reg_cap_ext.high_5ghz_chan,
+					max_5g_freq) : max_5g_freq;
+		info->support_6ghz_band =
+			max_5g_freq > wlan_reg_min_6ghz_chan_freq();
+	}
 }
 
 /**
@@ -590,6 +603,200 @@ static void policy_mgr_set_hw_mode_params(struct wlan_objmgr_psoc *psoc,
 		hw_mode_id);
 }
 
+QDF_STATUS policy_mgr_get_radio_combinations(struct wlan_objmgr_psoc *psoc,
+					     struct radio_combination *comb,
+					     uint32_t comb_max,
+					     uint32_t *comb_num)
+{
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+	struct radio_combination *radio_comb;
+	uint32_t i;
+	bool dbs_or_sbs_enabled = false;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*comb_num = 0;
+	if (policy_mgr_is_hw_dbs_capable(psoc) ||
+	    policy_mgr_is_hw_sbs_capable(psoc))
+		dbs_or_sbs_enabled = true;
+
+	for (i = 0; i < pm_ctx->radio_comb_num; i++) {
+		radio_comb = &pm_ctx->radio_combinations[i];
+		if (!dbs_or_sbs_enabled && radio_comb->hw_mode != MODE_SMM)
+			continue;
+		if (*comb_num >= comb_max) {
+			policy_mgr_err("out of buffer %d max %d",
+				       pm_ctx->radio_comb_num,
+				       comb_max);
+			return QDF_STATUS_E_FAILURE;
+		}
+		policy_mgr_debug("radio %d: mode %d mac0 (0x%x, 0x%x), mac1 (0x%x 0x%x)",
+				 *comb_num,
+				 radio_comb->hw_mode,
+				 radio_comb->band_mask[0],
+				 radio_comb->antenna[0],
+				 radio_comb->band_mask[1],
+				 radio_comb->antenna[1]);
+		qdf_mem_copy(&comb[*comb_num], radio_comb,
+			     sizeof(*radio_comb));
+		(*comb_num)++;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * policy_mgr_add_radio_comb() - Add radio combination
+ * @pm_ctx: bandwidth in terms of wmi_channel_width
+ * @radio: radio combination
+ *
+ * This function adds one radio combination to list
+ *
+ * Return: void
+ */
+static void policy_mgr_add_radio_comb(struct policy_mgr_psoc_priv_obj *pm_ctx,
+				      struct radio_combination *radio)
+{
+	uint32_t i;
+	struct radio_combination *comb;
+
+	/* don't add duplicated item */
+	for (i = 0; i < pm_ctx->radio_comb_num; i++) {
+		comb = &pm_ctx->radio_combinations[i];
+		if (radio->hw_mode == comb->hw_mode &&
+		    radio->band_mask[0] == comb->band_mask[0] &&
+		    radio->band_mask[1] == comb->band_mask[1] &&
+		    radio->antenna[0] == comb->antenna[0] &&
+		    radio->antenna[1] == comb->antenna[1])
+			return;
+	}
+	if (pm_ctx->radio_comb_num == MAX_RADIO_COMBINATION) {
+		policy_mgr_err("radio combination overflow %d",
+			       pm_ctx->radio_comb_num);
+		return;
+	}
+	policy_mgr_debug("radio %d: mode %d mac0 (0x%x, 0x%x), mac1 (0x%x 0x%x)",
+			 pm_ctx->radio_comb_num,
+			 radio->hw_mode,
+			 radio->band_mask[0],
+			 radio->antenna[0],
+			 radio->band_mask[1],
+			 radio->antenna[1]);
+
+	qdf_mem_copy(&pm_ctx->radio_combinations[pm_ctx->radio_comb_num],
+		     radio, sizeof(*radio));
+	pm_ctx->radio_comb_num++;
+}
+
+#define SET_RADIO(_radio, _mode, _mac0_band, _mac1_band,\
+		  _mac0_antenna, _mac1_antenna) \
+do { \
+	(_radio)->hw_mode = _mode; \
+	(_radio)->band_mask[0] = _mac0_band; \
+	(_radio)->band_mask[1] = _mac1_band; \
+	(_radio)->antenna[0] = _mac0_antenna; \
+	(_radio)->antenna[1] = _mac1_antenna; \
+} while (0)
+
+/**
+ * policy_mgr_update_radio_combination_matrix() - Update radio combination
+ * list
+ * @psoc: psoc object
+ * @mac0_ss_bw_info: mac 0 band/bw info
+ * @mac1_ss_bw_info: mac 1 band/bw info
+ * @dbs_mode: dbs mode
+ * @sbs_mode: sbs mode
+ *
+ * This function updates radio combination list based on hw mode information.
+ *
+ * Return: void
+ */
+static void
+policy_mgr_update_radio_combination_matrix(
+			struct wlan_objmgr_psoc *psoc,
+			struct policy_mgr_mac_ss_bw_info mac0_ss_bw_info,
+			struct policy_mgr_mac_ss_bw_info mac1_ss_bw_info,
+			uint32_t dbs_mode, uint32_t sbs_mode)
+{
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+	struct radio_combination radio;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return;
+	}
+
+	if (!dbs_mode && !sbs_mode) {
+		if (mac0_ss_bw_info.mac_band_cap &
+					WMI_HOST_WLAN_2G_CAPABILITY) {
+			SET_RADIO(&radio, MODE_SMM, BIT(REG_BAND_2G), 0,
+				  mac0_ss_bw_info.mac_tx_stream, 0);
+			policy_mgr_add_radio_comb(pm_ctx, &radio);
+		}
+		if (mac0_ss_bw_info.mac_band_cap &
+					WMI_HOST_WLAN_5G_CAPABILITY) {
+			SET_RADIO(&radio, MODE_SMM, BIT(REG_BAND_5G), 0,
+				  mac0_ss_bw_info.mac_tx_stream, 0);
+			policy_mgr_add_radio_comb(pm_ctx, &radio);
+			if (mac0_ss_bw_info.support_6ghz_band) {
+				SET_RADIO(&radio, MODE_SMM, BIT(REG_BAND_6G),
+					  0, mac0_ss_bw_info.mac_tx_stream, 0);
+				policy_mgr_add_radio_comb(pm_ctx, &radio);
+			}
+		}
+		return;
+	}
+	if ((mac0_ss_bw_info.mac_band_cap & WMI_HOST_WLAN_2G_CAPABILITY) &&
+	    (mac1_ss_bw_info.mac_band_cap & WMI_HOST_WLAN_5G_CAPABILITY)) {
+		SET_RADIO(&radio, MODE_DBS, BIT(REG_BAND_2G), BIT(REG_BAND_5G),
+			  mac0_ss_bw_info.mac_tx_stream,
+			  mac1_ss_bw_info.mac_tx_stream);
+		policy_mgr_add_radio_comb(pm_ctx, &radio);
+		if (mac1_ss_bw_info.support_6ghz_band) {
+			SET_RADIO(&radio, MODE_DBS, BIT(REG_BAND_2G),
+				  BIT(REG_BAND_6G),
+				  mac0_ss_bw_info.mac_tx_stream,
+				  mac1_ss_bw_info.mac_tx_stream);
+			policy_mgr_add_radio_comb(pm_ctx, &radio);
+		}
+	}
+	if ((mac0_ss_bw_info.mac_band_cap & WMI_HOST_WLAN_5G_CAPABILITY) &&
+	    (mac1_ss_bw_info.mac_band_cap & WMI_HOST_WLAN_2G_CAPABILITY)) {
+		SET_RADIO(&radio, MODE_DBS, BIT(REG_BAND_2G), BIT(REG_BAND_5G),
+			  mac1_ss_bw_info.mac_tx_stream,
+			  mac0_ss_bw_info.mac_tx_stream);
+		policy_mgr_add_radio_comb(pm_ctx, &radio);
+		if (mac0_ss_bw_info.support_6ghz_band) {
+			SET_RADIO(&radio, MODE_DBS, BIT(REG_BAND_2G),
+				  BIT(REG_BAND_6G),
+				  mac1_ss_bw_info.mac_tx_stream,
+				  mac0_ss_bw_info.mac_tx_stream);
+			policy_mgr_add_radio_comb(pm_ctx, &radio);
+		}
+	}
+	if ((mac0_ss_bw_info.mac_band_cap & WMI_HOST_WLAN_5G_CAPABILITY) &&
+	    (mac1_ss_bw_info.mac_band_cap & WMI_HOST_WLAN_5G_CAPABILITY)) {
+		if (mac0_ss_bw_info.support_6ghz_band) {
+			SET_RADIO(&radio, MODE_SBS, BIT(REG_BAND_5G),
+				  BIT(REG_BAND_6G),
+				  mac1_ss_bw_info.mac_tx_stream,
+				  mac0_ss_bw_info.mac_tx_stream);
+			policy_mgr_add_radio_comb(pm_ctx, &radio);
+		} else if (mac1_ss_bw_info.support_6ghz_band) {
+			SET_RADIO(&radio, MODE_SBS, BIT(REG_BAND_5G),
+				  BIT(REG_BAND_6G),
+				  mac0_ss_bw_info.mac_tx_stream,
+				  mac1_ss_bw_info.mac_tx_stream);
+			policy_mgr_add_radio_comb(pm_ctx, &radio);
+		}
+	}
+}
+
 QDF_STATUS policy_mgr_update_hw_mode_list(struct wlan_objmgr_psoc *psoc,
 					  struct target_psoc_info *tgt_hdl)
 {
@@ -633,6 +840,10 @@ QDF_STATUS policy_mgr_update_hw_mode_list(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	pm_ctx->radio_comb_num = 0;
+	qdf_mem_zero(pm_ctx->radio_combinations,
+		     sizeof(pm_ctx->radio_combinations));
+
 	policy_mgr_debug("Updated HW mode list: Num modes:%d",
 		pm_ctx->num_dbs_hw_modes);
 
@@ -665,6 +876,10 @@ QDF_STATUS policy_mgr_update_hw_mode_list(struct wlan_objmgr_psoc *psoc,
 		policy_mgr_set_hw_mode_params(psoc, mac0_ss_bw_info,
 			mac1_ss_bw_info, i, tmp->hw_mode_id, dbs_mode,
 			sbs_mode);
+		/* Update radio combination info */
+		policy_mgr_update_radio_combination_matrix(
+			psoc, mac0_ss_bw_info, mac1_ss_bw_info,
+			dbs_mode, sbs_mode);
 	}
 	return QDF_STATUS_SUCCESS;
 }
