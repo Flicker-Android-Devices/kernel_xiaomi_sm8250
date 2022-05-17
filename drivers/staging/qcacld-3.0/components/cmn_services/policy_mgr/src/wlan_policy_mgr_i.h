@@ -356,6 +356,8 @@ struct policy_mgr_psoc_priv_obj {
 	uint32_t old_hw_mode_index;
 	uint32_t new_hw_mode_index;
 	struct dual_mac_config dual_mac_cfg;
+	uint32_t radio_comb_num;
+	struct radio_combination radio_combinations[MAX_RADIO_COMBINATION];
 	uint32_t hw_mode_change_in_progress;
 	struct policy_mgr_user_cfg user_cfg;
 	uint32_t unsafe_channel_list[NUM_CHANNELS];
@@ -379,12 +381,14 @@ struct policy_mgr_psoc_priv_obj {
  * @mac_bw: Max bandwidth(wmi_channel_width enum type)
  * @mac_band_cap: supported Band bit map(WLAN_2G_CAPABILITY = 0x1,
  *                            WLAN_5G_CAPABILITY = 0x2)
+ * @support_6ghz_band: support 6 GHz band
  */
 struct policy_mgr_mac_ss_bw_info {
 	uint32_t mac_tx_stream;
 	uint32_t mac_rx_stream;
 	uint32_t mac_bw;
 	uint32_t mac_band_cap;
+	bool support_6ghz_band;
 };
 
 struct policy_mgr_psoc_priv_obj *policy_mgr_get_context(
