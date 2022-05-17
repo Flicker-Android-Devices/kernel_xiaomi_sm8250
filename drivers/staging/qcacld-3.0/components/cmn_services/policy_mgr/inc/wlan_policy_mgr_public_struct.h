@@ -1275,6 +1275,43 @@ struct dbs_nss {
 };
 
 /**
+ * enum policy_mgr_mode – enum for host mode
+ * @MODE_SMM:               Single mac mode
+ * @MODE_DBS:               DBS mode
+ * @MODE_SBS:               SBS mode with either high share or low share
+ * @MODE_SBS_UPPER_SHARE:   Higher 5Ghz shared with 2.4Ghz
+ * @MODE_SBS_LOWER_SHARE:   LOWER 5Ghz shared with 2.4Ghz
+ * #MODE_EMLSR:             eMLSR mode
+ * @MODE_HW_MAX: MAX
+ */
+enum policy_mgr_mode {
+	MODE_SMM,
+	MODE_DBS,
+	MODE_SBS,
+	MODE_SBS_UPPER_SHARE,
+	MODE_SBS_LOWER_SHARE,
+	MODE_EMLSR,
+	MODE_HW_MAX,
+};
+
+/**
+ * Max radio combination numbers
+ */
+#define MAX_RADIO_COMBINATION 16
+
+/**
+ * struct radio_combination - Radio combination
+ * @hw_mode: hw mode type
+ * @band_mask: band support type for each mac
+ * @antenna: antenna support for each mac
+ */
+struct radio_combination {
+	enum policy_mgr_mode hw_mode;
+	uint8_t band_mask[MAX_MAC];
+	uint8_t antenna[MAX_MAC];
+};
+
+/**
  * struct connection_info - connection information
  * @mac_id: The HW mac it is running
  * @vdev_id: vdev id
