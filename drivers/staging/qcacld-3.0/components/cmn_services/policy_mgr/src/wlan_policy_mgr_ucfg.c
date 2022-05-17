@@ -245,3 +245,13 @@ ucfg_policy_mgr_get_indoor_chnl_marking(struct wlan_objmgr_psoc *psoc,
 {
 	return policy_mgr_get_indoor_chnl_marking(psoc, indoor_chnl_marking);
 }
+
+QDF_STATUS
+ucfg_policy_mgr_get_radio_combinations(struct wlan_objmgr_psoc *psoc,
+				       struct radio_combination *comb,
+				       uint32_t comb_max,
+				       uint32_t *comb_num)
+{
+	return policy_mgr_get_radio_combinations(psoc, comb,
+						 comb_max, comb_num);
+}
