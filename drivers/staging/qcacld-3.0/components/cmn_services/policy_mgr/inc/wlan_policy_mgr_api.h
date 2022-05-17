@@ -3356,4 +3356,20 @@ bool policy_mgr_dump_channel_list(uint32_t len,
 				  uint32_t *pcl_channels,
 				  uint8_t *pcl_weight);
 
+/**
+ * policy_mgr_get_radio_combinations() - Query the supported radio combinations
+ * @psoc: soc object
+ * @comb: combination buffer
+ * @comb_max: max combination number can be saved to comb buffer
+ * @comb_num: returned combination number
+ *
+ * This function returns the radio combination information supported by target.
+ *
+ * Return: QDF_STATUS_SUCCESS if query successfully
+ */
+QDF_STATUS policy_mgr_get_radio_combinations(struct wlan_objmgr_psoc *psoc,
+					     struct radio_combination *comb,
+					     uint32_t comb_max,
+					     uint32_t *comb_num);
+
 #endif /* __WLAN_POLICY_MGR_API_H */
