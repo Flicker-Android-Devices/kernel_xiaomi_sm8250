@@ -11832,6 +11832,160 @@ static int wlan_hdd_cfg80211_get_bus_size(struct wiphy *wiphy,
 	return errno;
 }
 
+/**
+ * __wlan_hdd_cfg80211_get_radio_combination_matrix() - get radio matrix info
+ * @wiphy:   pointer to wireless wiphy structure.
+ * @wdev:    pointer to wireless_dev structure.
+ * @data:    Pointer to the data to be passed via vendor interface
+ * @data_len:Length of the data to be passed
+ *
+ * Return:   Return the Success or Failure code.
+ */
+static int
+__wlan_hdd_cfg80211_get_radio_combination_matrix(struct wiphy *wiphy,
+						 struct wireless_dev *wdev,
+						 const void *data,
+						 int data_len)
+{
+	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
+	struct sk_buff *reply_skb;
+	int ret;
+	int skb_len;
+	struct nlattr *combination, *combination_cfg, *radio, *radio_comb;
+	uint32_t comb_num = 0;
+	struct radio_combination comb[MAX_RADIO_COMBINATION];
+	int comb_idx, radio_idx;
+	enum qca_set_band qca_band;
+
+	hdd_enter();
+
+	ret = wlan_hdd_validate_context(hdd_ctx);
+	if (ret)
+		return ret;
+
+	ucfg_policy_mgr_get_radio_combinations(hdd_ctx->psoc, comb,
+					       QDF_ARRAY_SIZE(comb),
+					       &comb_num);
+	if (!comb_num) {
+		hdd_err("invalid combination 0");
+		return -EINVAL;
+	}
+
+	/* band and antenna */
+	skb_len = nla_total_size(sizeof(uint32_t)) +
+		  nla_total_size(sizeof(uint8_t));
+	/* radio nested for max 2 MACs*/
+	skb_len = nla_total_size(skb_len) * MAX_MAC;
+	/* one radio combination */
+	skb_len = nla_total_size(nla_total_size(skb_len));
+	/* total combinations */
+	skb_len = nla_total_size(comb_num * nla_total_size(skb_len));
+	skb_len = NLMSG_HDRLEN + skb_len;
+	reply_skb = wlan_cfg80211_vendor_cmd_alloc_reply_skb(wiphy, skb_len);
+	if (!reply_skb) {
+		hdd_err("cfg80211_vendor_cmd_alloc_reply_skb failed, len %d",
+			skb_len);
+		return -EINVAL;
+	}
+
+	combination_cfg = nla_nest_start(reply_skb,
+			QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_SUPPORTED_CFGS);
+	if (!combination_cfg) {
+		ret = -ENOMEM;
+		goto err;
+	}
+	for (comb_idx = 0; comb_idx < comb_num; comb_idx++) {
+		combination = nla_nest_start(reply_skb, comb_idx);
+		if (!combination) {
+			ret = -ENOMEM;
+			goto err;
+		}
+		radio_comb = nla_nest_start(reply_skb,
+				QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_CFGS);
+		if (!radio_comb) {
+			ret = -ENOMEM;
+			goto err;
+		}
+		for (radio_idx = 0; radio_idx < MAX_MAC; radio_idx++) {
+			if (!comb[comb_idx].band_mask[radio_idx])
+				break;
+			radio = nla_nest_start(reply_skb, radio_idx);
+			if (comb[comb_idx].band_mask[radio_idx] ==
+							BIT(REG_BAND_5G)) {
+				qca_band = QCA_SETBAND_5G;
+			} else if (comb[comb_idx].band_mask[radio_idx] ==
+							BIT(REG_BAND_6G)) {
+				qca_band = QCA_SETBAND_6G;
+			} else if (comb[comb_idx].band_mask[radio_idx] ==
+							BIT(REG_BAND_2G)) {
+				qca_band = QCA_SETBAND_2G;
+			} else {
+				hdd_err("invalid band mask 0 for comb %d radio %d",
+					comb_idx, radio_idx);
+				ret = -EINVAL;
+				goto err;
+			}
+
+			if (nla_put_u32(reply_skb,
+				       QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_BAND,
+				       qca_band)) {
+				ret = -ENOMEM;
+				goto err;
+			}
+			if (nla_put_u8(reply_skb,
+				       QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_ANTENNA,
+				       comb[comb_idx].antenna[radio_idx])) {
+				ret = -ENOMEM;
+				goto err;
+			}
+			hdd_debug("comb[%d]:cfg[%d]: band %d, antenna %d",
+				  comb_idx, radio_idx, qca_band,
+				  comb[comb_idx].antenna[radio_idx]);
+			nla_nest_end(reply_skb, radio);
+		}
+		nla_nest_end(reply_skb, radio_comb);
+		nla_nest_end(reply_skb, combination);
+	}
+	nla_nest_end(reply_skb, combination_cfg);
+	ret = wlan_cfg80211_vendor_cmd_reply(reply_skb);
+
+	return ret;
+err:
+	wlan_cfg80211_vendor_free_skb(reply_skb);
+
+	return ret;
+}
+
+/**
+ * wlan_hdd_cfg80211_get_radio_combination_matrix() - get radio matrix info
+ * @wiphy:   pointer to wireless wiphy structure.
+ * @wdev:    pointer to wireless_dev structure.
+ * @data:    Pointer to the data to be passed via vendor interface
+ * @data_len:Length of the data to be passed
+ *
+ * Return:   Return the Success or Failure code.
+ */
+static int
+wlan_hdd_cfg80211_get_radio_combination_matrix(struct wiphy *wiphy,
+					       struct wireless_dev *wdev,
+					       const void *data, int data_len)
+{
+	struct osif_psoc_sync *psoc_sync;
+	int errno;
+
+	errno = osif_psoc_sync_op_start(wiphy_dev(wiphy), &psoc_sync);
+	if (errno)
+		return errno;
+
+	errno = __wlan_hdd_cfg80211_get_radio_combination_matrix(wiphy, wdev,
+								 data,
+								 data_len);
+
+	osif_psoc_sync_op_stop(psoc_sync);
+
+	return errno;
+}
+
 const struct nla_policy setband_policy[QCA_WLAN_VENDOR_ATTR_MAX + 1] = {
 	[QCA_WLAN_VENDOR_ATTR_SETBAND_VALUE] = {.type = NLA_U32},
 	[QCA_WLAN_VENDOR_ATTR_SETBAND_MASK] = {.type = NLA_U32},
@@ -15582,6 +15736,14 @@ const struct wiphy_vendor_command hdd_wiphy_vendor_commands[] = {
 			 WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = wlan_hdd_cfg80211_get_bus_size
+	},
+	{
+		.info.vendor_id = QCA_NL80211_VENDOR_ID,
+		.info.subcmd =
+			QCA_NL80211_VENDOR_SUBCMD_GET_RADIO_COMBINATION_MATRIX,
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
+			 WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wlan_hdd_cfg80211_get_radio_combination_matrix
 	},
 	{
 		.info.vendor_id = QCA_NL80211_VENDOR_ID,
