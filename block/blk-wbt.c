@@ -811,6 +811,9 @@ int wbt_init(struct request_queue *q)
 	rwb->enable_state = WBT_STATE_ON_DEFAULT;
 	rwb->wc = 1;
 	rwb->rq_depth.default_depth = RWB_DEF_DEPTH;
+	rwb->rq_depth.queue_depth = blk_queue_depth(q);
+	rwb->min_lat_nsec = wbt_default_latency_nsec(q);
+
 	__wbt_update_limits(rwb);
 
 	/*
@@ -819,9 +822,6 @@ int wbt_init(struct request_queue *q)
 	rq_qos_add(q, &rwb->rqos);
 	blk_stat_add_callback(q, rwb->cb);
 
-	rwb->min_lat_nsec = wbt_default_latency_nsec(q);
-
-	wbt_set_queue_depth(q, blk_queue_depth(q));
 	wbt_set_write_cache(q, test_bit(QUEUE_FLAG_WC, &q->queue_flags));
 
 	return 0;
