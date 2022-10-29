@@ -66,8 +66,8 @@ module_param_named(debug_mask, debug_mask, int, 0600);
 
 #define BQ27Z561_DEFUALT_TERM -200
 #define BQ27Z561_DEFUALT_FFC_TERM -680
-#define FFC_TERMINATION_CURRENT_LOW -790
-#define FFC_TERMINATION_CURRENT_HIGH -920
+#define FFC_TERMINATION_CURRENT_LOW -810
+#define FFC_TERMINATION_CURRENT_HIGH -810
 #define BQ27Z561_DEFUALT_RECHARGE_VOL 4380
 #define DUAL_BQ27Z561_FFC_TERM 720
 
@@ -950,7 +950,7 @@ static int fg_read_rsoc(struct bq_fg_chip *bq)
 	return soc;
 }
 
-#define HW_REPORT_FULL_SOC 9750
+#define HW_REPORT_FULL_SOC 9600
 #define CRITICAL_SOC 2790
 #define SOC_HY 2
 #define SOC_PROPORTION 93
@@ -1106,12 +1106,12 @@ static int fg_read_system_soc(struct bq_fg_chip *bq)
 	return soc;
 }
 
-static int i2c_error_cnt[FG_MAX_INDEX];
 static int fg_read_temperature(struct bq_fg_chip *bq)
 {
 	int ret;
 	u16 temp = 0;
 	static int last_temp[FG_MAX_INDEX];
+	static int i2c_error_cnt[FG_MAX_INDEX];
 
 	if (bq->fake_temp > 0)
 		return bq->fake_temp;
@@ -1517,7 +1517,6 @@ static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_RECHARGE_VBAT,
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_SOH,
-	POWER_SUPPLY_PROP_I2C_ERROR_COUNT,
 };
 
 #define SHUTDOWN_DELAY_VOL 3410
@@ -1866,12 +1865,6 @@ static int fg_get_property(struct power_supply *psy,
 			bq->soh = fg_read_soh(bq);
 		}
 		val->intval = bq->soh;
-		break;
-	case POWER_SUPPLY_PROP_I2C_ERROR_COUNT:
-		if (i2c_error_cnt[bq->fg_index] >= 3)
-			val->intval = 1;
-		else
-			val->intval = 0;
 		break;
 	default:
 		return -EINVAL;

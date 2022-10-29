@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-onlyD/
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  */
@@ -14,7 +14,7 @@
 #include <linux/pmic-voter.h>
 #include <linux/of_batterydata.h>
 #include <linux/ktime.h>
-#include "smb5-lib-munch.h"
+#include "smb5-lib.h"
 #include "smb5-reg.h"
 #include "schgm-flash.h"
 #include "step-chg-jeita.h"
@@ -51,6 +51,7 @@ static int smblib_dc_therm_charging(struct smb_charger *chg, int temp_level);
 static int smblib_get_batt_voltage_now(struct smb_charger *chg,
 				       union power_supply_propval *val);
 
+extern int cv_fv_state;
 int smblib_read(struct smb_charger *chg, u16 addr, u8 *val)
 {
 	unsigned int value;
@@ -576,7 +577,8 @@ static const struct apsd_result *smblib_get_apsd_result(struct smb_charger *chg)
 		if (smblib_apsd_results[i].bit == stat)
 			result = &smblib_apsd_results[i];
 	}
-
+	if (!stat && result == &smblib_apsd_results[HVDCP3P5])
+		result = &smblib_apsd_results[FLOAT];
 	if (apsd_stat & QC_CHARGER_BIT) {
 		if (chg->qc3p5_supported) {
 			if (result == &smblib_apsd_results[HVDCP3] &&
@@ -833,7 +835,8 @@ static int smb5_config_sys_iterm(struct smb_charger *chg, bool ffc_enable)
 }
 #endif
 
-int smb5_config_iterm(struct smb_charger *chg, int hi_thresh, int low_thresh)
+static int smb5_config_iterm(struct smb_charger *chg, int hi_thresh,
+			     int low_thresh)
 {
 	s16 raw_hi_thresh, raw_lo_thresh;
 	u8 *buf;
@@ -853,9 +856,7 @@ int smb5_config_iterm(struct smb_charger *chg, int hi_thresh, int low_thresh)
 	 *	raw (A) = (scaled_mA * ADC_CHG_TERM_MASK) / (10 * 1000)
 	 * Note: raw needs to be converted to big-endian format.
 	 */
-	dev_err(chg->dev,
-		"configure ADC_ITERM_CFG hi_thresh=%d,low_thresh:%d\n",
-		hi_thresh, low_thresh);
+
 	if (hi_thresh) {
 		raw_hi_thresh = ((hi_thresh * ADC_CHG_TERM_MASK) / 10000);
 		raw_hi_thresh = sign_extend32(raw_hi_thresh, 15);
@@ -983,7 +984,7 @@ set_term:
 	if (chg->support_ffc)
 		rc = vote(chg->fv_votable, NON_FFC_VFLOAT_VOTER, !enable,
 			  chg->non_fcc_batt_profile_fv_uv);
-
+	cv_fv_state = 0;
 	pr_info("fastcharge mode:%d termi:%d\n", enable, termi);
 
 	return 0;
@@ -1545,12 +1546,6 @@ static const struct apsd_result *smblib_update_usb_type(struct smb_charger *chg)
 		}
 	}
 
-	if (chg->mtbf_current >= 1500) {
-		chg->real_charger_type = POWER_SUPPLY_TYPE_USB_CDP;
-		chg->usb_psy_desc.type = POWER_SUPPLY_TYPE_USB_CDP;
-		smblib_dbg(chg, PR_REGISTER,
-			   "mtbf current 1500 and force to CDP!\n");
-	}
 	smblib_dbg(chg, PR_REGISTER, "APSD=%s PD=%d QC3P5=%d\n",
 		   apsd_result->name, chg->pd_active, chg->qc3p5_detected);
 	return apsd_result;
@@ -1776,7 +1771,7 @@ void smblib_suspend_on_debug_battery(struct smb_charger *chg)
 	rc = smblib_get_prop_from_bms(chg, POWER_SUPPLY_PROP_DEBUG_BATTERY,
 				      &val);
 	if (rc < 0) {
-		//smblib_err(chg, "Couldn't get debug battery prop rc=%d\n", rc);
+		smblib_err(chg, "Couldn't get debug battery prop rc=%d\n", rc);
 		return;
 	}
 	if (chg->suspend_input_on_debug_batt) {
@@ -3781,8 +3776,7 @@ int smblib_set_prop_battery_charging_enabled(
 				vote(chg->usb_icl_votable,
 				     MAIN_CHG_SUSPEND_VOTER, true, icl);
 		}
-
-#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561_MUNCH) &&                             \
+#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561) &&                                   \
 	(!defined CONFIG_DUAL_FUEL_GAUGE_BQ27Z561)
 		schedule_delayed_work(&chg->reduce_fcc_work,
 				      msecs_to_jiffies(ESR_WORK_TIME_97S));
@@ -3795,8 +3789,7 @@ int smblib_set_prop_battery_charging_enabled(
 		else
 			vote(chg->usb_icl_votable, MAIN_CHG_SUSPEND_VOTER,
 			     false, 0);
-
-#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561_MUNCH) &&                             \
+#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561) &&                                   \
 	(!defined CONFIG_DUAL_FUEL_GAUGE_BQ27Z561)
 		if (is_client_vote_enabled(chg->fcc_votable, ESR_WORK_VOTER))
 			vote(chg->fcc_votable, ESR_WORK_VOTER, false, 0);
@@ -4655,7 +4648,7 @@ int smblib_disable_hw_jeita(struct smb_charger *chg, bool disable)
 	 * Disable h/w base JEITA compensation if s/w JEITA is enabled
 	 */
 	/*J1/K81 use ti gauge disable all hard jeita, J2 use qcom default jeita */
-#if (defined CONFIG_FUEL_GAUGE_BQ27Z561_MUNCH) ||                              \
+#if (defined CONFIG_FUEL_GAUGE_BQ27Z561) ||                                    \
 	(defined CONFIG_DUAL_FUEL_GAUGE_BQ27Z561)
 	mask = 0xFF;
 	pr_info("should disable hw jeita");
@@ -5050,10 +5043,7 @@ static void smblib_conn_therm_work(struct work_struct *work)
 		0,
 	};
 	int usb_present;
-	int retry_count = 30;
 	u64 elapsed_us;
-	bool cp_master_enabled = false;
-	bool cp_slave_enabled = false;
 
 	rc = smblib_get_prop_connector_temp(chg);
 	if (rc < 0)
@@ -5082,9 +5072,8 @@ static void smblib_conn_therm_work(struct work_struct *work)
 		wdog_timeout = THERM_REG_RECHECK_DELAY_10S;
 	}
 
-	//smblib_dbg(chg, PR_OEM,"CONN TEMP thermal_status=%d, chip->thermal_status=%d, connect_temp= %d\n",
-	//	thermal_status, chg->thermal_status, chg->connector_temp);
-
+	//smblib_dbg(chg, PR_OEM, "CONN TEMP thermal_status=%d, chip->thermal_status=%d, connect_temp= %d\n",
+	//					thermal_status, chg->thermal_status, chg->connector_temp);
 	if (thermal_status != chg->thermal_status) {
 		chg->thermal_status = thermal_status;
 		if (thermal_status == TEMP_ABOVE_RANGE) {
@@ -5095,46 +5084,8 @@ static void smblib_conn_therm_work(struct work_struct *work)
 			smblib_err(chg, "vbus_temp[%d-%d-%d-%d]\n",
 				   chg->connector_temp, chg->skin_temp,
 				   chg->smb_temp, chg->die_temp);
-
-			val.intval = 1;
-			/*rc = smblib_set_prop_input_suspend(chg, &val);
-			if (rc < 0)
-				smblib_err(chg,"Failed to set suspend\n");*/
-
-			power_supply_set_property(
-				chg->batt_psy, POWER_SUPPLY_PROP_INPUT_SUSPEND,
-				&val);
-
-			while (retry_count) {
-				if (chg->cp_psy && chg->cp_sec_psy) {
-					rc = power_supply_get_property(
-						chg->cp_psy,
-						POWER_SUPPLY_PROP_CHARGING_ENABLED,
-						&val);
-					if (!rc)
-						cp_master_enabled = val.intval;
-
-					rc = power_supply_get_property(
-						chg->cp_sec_psy,
-						POWER_SUPPLY_PROP_CHARGING_ENABLED,
-						&val);
-					if (!rc)
-						cp_slave_enabled = val.intval;
-				}
-				smblib_err(
-					chg,
-					"connect temp is too hot, cp_enable:%d, cp_sec_enable：%d，retry_count:%d\n",
-					cp_master_enabled, cp_slave_enabled,
-					retry_count);
-
-				if (!cp_master_enabled && !cp_slave_enabled)
-					break;
-				msleep(80);
-				retry_count--;
-			}
-
-			msleep(500);
-
+			vote(chg->usb_icl_votable, SW_CONN_THERM_VOTER, true,
+			     0);
 			if (chg->sink_src_mode == SRC_MODE)
 				smblib_vbus_regulator_disable(
 					chg->vbus_vreg->rdev);
@@ -5148,15 +5099,8 @@ static void smblib_conn_therm_work(struct work_struct *work)
 			smblib_err(chg, "vbus_temp[%d-%d-%d-%d]\n",
 				   chg->connector_temp, chg->skin_temp,
 				   chg->smb_temp, chg->die_temp);
-
-			val.intval = 0;
-			power_supply_set_property(
-				chg->batt_psy, POWER_SUPPLY_PROP_INPUT_SUSPEND,
-				&val);
-			/*rc = smblib_set_prop_input_suspend(chg, &val);
-			if (rc < 0)
-				smblib_err(chg,"Failed to set suspend\n");*/
-
+			vote(chg->usb_icl_votable, SW_CONN_THERM_VOTER, false,
+			     0);
 			if (chg->sink_src_mode == SRC_MODE)
 				smblib_vbus_regulator_enable(
 					chg->vbus_vreg->rdev);
@@ -7961,7 +7905,6 @@ static void smblib_eval_chg_termination(struct smb_charger *chg, u8 batt_status)
 	 * to prevent overcharing.
 	 */
 	if ((batt_status == TERMINATE_CHARGE) && (pval.intval == 100)) {
-		smblib_err(chg, "term-current debug to enable alarm\n");
 		chg->cc_soc_ref = 0;
 		chg->last_cc_soc = 0;
 		chg->term_vbat_uv = 0;
@@ -7998,7 +7941,7 @@ irqreturn_t chg_state_change_irq_handler(int irq, void *data)
 	}
 
 	stat = stat & BATTERY_CHARGER_STATUS_MASK;
-	smblib_dbg(chg, PR_OEM, "term-current stat: %d\n", stat);
+
 	if (chg->wa_flags & CHG_TERMINATION_WA)
 		smblib_eval_chg_termination(chg, stat);
 
@@ -8349,7 +8292,7 @@ unlock:
 	mutex_unlock(&chg->typec_lock);
 }
 
-#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561_MUNCH) &&                             \
+#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561) &&                                   \
 	(!defined CONFIG_DUAL_FUEL_GAUGE_BQ27Z561)
 #define REDUCED_CURRENT 1000000
 #define REDUCED_CURRENT_LOW 500000
@@ -8763,7 +8706,7 @@ void smblib_usb_plugin_locked(struct smb_charger *chg)
 			smblib_hvdcp_detect_enable(chg, false);
 			chg->cc_un_compliant_detected = false;
 		}
-#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561_MUNCH) &&                             \
+#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561) &&                                   \
 	(!defined CONFIG_DUAL_FUEL_GAUGE_BQ27Z561)
 		cancel_delayed_work_sync(&chg->reduce_fcc_work);
 		vote(chg->fcc_votable, ESR_WORK_VOTER, false, 0);
@@ -11990,7 +11933,6 @@ static void batt_update_work(struct work_struct *work)
 	if (rc < 0) {
 		pr_err("Couldn't get batt capacity status rc=%d\n", rc);
 	}
-
 	chg->capacity = pval.intval;
 }
 
@@ -11998,38 +11940,10 @@ static void bms_update_work(struct work_struct *work)
 {
 	struct smb_charger *chg =
 		container_of(work, struct smb_charger, bms_update_work);
-	int bms_i2c_error_count;
-	int ret;
-	static int input_suspend = 0;
-	union power_supply_propval val = {
-		0,
-	};
 
 	smblib_suspend_on_debug_battery(chg);
 
 	smblib_dynamic_recharge_vbat(chg);
-
-	ret = power_supply_get_property(
-		chg->bms_psy, POWER_SUPPLY_PROP_I2C_ERROR_COUNT, &val);
-	if (!ret) {
-		bms_i2c_error_count = val.intval;
-	}
-
-	if (bms_i2c_error_count && chg->batt_psy && !input_suspend) {
-		input_suspend = 1;
-		val.intval = 1;
-		ret = power_supply_set_property(
-			chg->batt_psy, POWER_SUPPLY_PROP_INPUT_SUSPEND, &val);
-		if (ret < 0)
-			smblib_err(chg, "Failed to set suspend\n");
-	} else if (!bms_i2c_error_count && chg->batt_psy && input_suspend) {
-		input_suspend = 0;
-		val.intval = 0;
-		ret = power_supply_set_property(
-			chg->batt_psy, POWER_SUPPLY_PROP_INPUT_SUSPEND, &val);
-		if (ret < 0)
-			smblib_err(chg, "Failed to set suspend\n");
-	}
 
 	if (chg->batt_psy)
 		power_supply_changed(chg->batt_psy);
@@ -12402,9 +12316,9 @@ static void smblib_chg_termination_work(struct work_struct *work)
 		}
 	}
 
-	smblib_err(
-		chg,
-		"term-current Chg Term WA readings: cc_soc: %d, cc_soc_ref: %d, delay: %d vbat_now %d term_vbat %d\n",
+	smblib_dbg(
+		chg, PR_MISC,
+		"Chg Term WA readings: cc_soc: %d, cc_soc_ref: %d, delay: %d vbat_now %d term_vbat %d\n",
 		pval.intval, chg->cc_soc_ref, delay, vbat_now_uv,
 		chg->term_vbat_uv);
 
@@ -12420,8 +12334,7 @@ static enum alarmtimer_restart chg_termination_alarm_cb(struct alarm *alarm,
 	struct smb_charger *chg =
 		container_of(alarm, struct smb_charger, chg_termination_alarm);
 
-	smblib_err(chg,
-		   "term-current Charge termination WA alarm triggered %lld\n",
+	smblib_dbg(chg, PR_MISC, "Charge termination WA alarm triggered %lld\n",
 		   ktime_to_ms(now));
 
 	/* Atomic context, cannot use voter */
@@ -12950,7 +12863,7 @@ int smblib_init(struct smb_charger *chg)
 	INIT_DELAYED_WORK(&chg->reg_work, smblib_reg_work);
 	INIT_DELAYED_WORK(&chg->thermal_setting_work,
 			  smblib_thermal_setting_work);
-#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561_MUNCH) &&                             \
+#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561) &&                                   \
 	(!defined CONFIG_DUAL_FUEL_GAUGE_BQ27Z561)
 	INIT_DELAYED_WORK(&chg->reduce_fcc_work, reduce_fcc_work);
 #endif
@@ -13025,7 +12938,7 @@ int smblib_init(struct smb_charger *chg)
 	chg->cp_reason = POWER_SUPPLY_CP_NONE;
 	chg->thermal_status = TEMP_BELOW_RANGE;
 	chg->pps_thermal_level = -EINVAL;
-#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561_MUNCH) &&                             \
+#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561) &&                                   \
 	(!defined CONFIG_DUAL_FUEL_GAUGE_BQ27Z561)
 	chg->esr_work_status = ESR_CHECK_FCC_NOLIMIT;
 #endif
@@ -13168,7 +13081,7 @@ int smblib_deinit(struct smb_charger *chg)
 		cancel_delayed_work_sync(&chg->six_pin_batt_step_chg_work);
 		cancel_delayed_work_sync(&chg->pr_swap_detach_work);
 		cancel_delayed_work_sync(&chg->reg_work);
-#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561_MUNCH) &&                             \
+#if (!defined CONFIG_FUEL_GAUGE_BQ27Z561) &&                                   \
 	(!defined CONFIG_DUAL_FUEL_GAUGE_BQ27Z561)
 		cancel_delayed_work_sync(&chg->reduce_fcc_work);
 #endif
