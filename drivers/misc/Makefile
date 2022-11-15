@@ -80,3 +80,4 @@ obj-y                           += qrc/
 obj-$(CONFIG_KINECTICS_XR_NORDIC) += kxrctrl/
 obj-$(CONFIG_NTSYNC)		+= ntsync.o
 obj-$(CONFIG_MMHARDWARE_OTHER_DETECTION) += mmhardware_others.o
+obj-$(CONFIG_HALL_AKM09970)	+= akm09970.o
