@@ -778,6 +778,18 @@ static void dd_prepare_request(struct request *rq, struct bio *bio)
 	rq->elv.priv[0] = NULL;
 }
 
+static bool dd_has_write_work(struct blk_mq_hw_ctx *hctx)
+{
+	struct deadline_data *dd = hctx->queue->elevator->elevator_data;
+	enum dd_prio p;
+
+	for (p = 0; p <= DD_PRIO_MAX; p++)
+		if (!list_empty_careful(&dd->per_prio[p].fifo_list[DD_WRITE]))
+			return true;
+
+	return false;
+}
+
 /*
  * Callback from inside blk_mq_free_request().
  *
@@ -813,17 +825,17 @@ static void dd_finish_request(struct request *rq)
 	atomic_inc(&per_prio->stats.completed);
 
 	if (blk_queue_is_zoned(q)) {
+		struct blk_mq_hw_ctx *hctx;
 		unsigned long flags;
 
 		spin_lock_irqsave(&dd->zone_lock, flags);
 		blk_req_zone_write_unlock(rq);
-		if (!list_empty(&per_prio->fifo_list[DD_WRITE])) {
-			struct blk_mq_hw_ctx *hctx;
-
-			hctx = blk_mq_map_queue(q, rq->mq_ctx->cpu);
-			blk_mq_sched_mark_restart_hctx(hctx);
-		}
 		spin_unlock_irqrestore(&dd->zone_lock, flags);
+
+		hctx = blk_mq_map_queue(q, rq->mq_ctx->cpu);
+
+		if (dd_has_write_work(hctx))
+			blk_mq_sched_mark_restart_hctx(hctx);
 	}
 }
 
