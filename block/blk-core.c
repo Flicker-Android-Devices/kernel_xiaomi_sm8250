@@ -2575,7 +2575,7 @@ static int blk_cloned_rq_check_limits(struct request_queue *q,
 	 * limitation.
 	 */
 	blk_recalc_rq_segments(rq);
-	if (rq->nr_phys_segments > queue_max_segments(q)) {
+	if (rq->nr_phys_segments > blk_rq_get_max_segments(rq)) {
 		printk(KERN_ERR "%s: over max segments limit.\n", __func__);
 		return -EIO;
 	}
