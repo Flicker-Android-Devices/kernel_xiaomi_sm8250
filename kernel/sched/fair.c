@@ -8131,11 +8131,35 @@ static void select_cpu_candidates(struct sched_domain *sd, cpumask_t *cpus,
 			 * much capacity we can get out of the CPU; this is
 			 * aligned with schedutil_cpu_util().
 			 */
-			util = uclamp_rq_util_with(cpu_rq(cpu), util, p);
+			if (uclamp_is_used()) {
+				unsigned long rq_util_min, rq_util_max;
+				unsigned long util_min, util_max;
 
-			if (cpu_cap * 1024 <
-					util * sched_capacity_margin_up[cpu])
-				continue;
+				if (uclamp_rq_is_idle(cpu_rq(cpu))) {
+					util_min = uclamp_eff_value(p, UCLAMP_MIN);
+					util_max = uclamp_eff_value(p, UCLAMP_MAX);
+				} else {
+					/*
+					 * Open code uclamp_rq_util_with() except for
+					 * the clamp() part. Ie: apply max aggregation
+					 * only. util_fits_cpu() logic requires to
+					 * operate on non clamped util but must use the
+					 * max-aggregated uclamp_{min, max}.
+					 */
+					rq_util_min = uclamp_rq_get(cpu_rq(cpu), UCLAMP_MIN);
+					rq_util_max = uclamp_rq_get(cpu_rq(cpu), UCLAMP_MAX);
+
+					util_min = max(rq_util_min, uclamp_eff_value(p, UCLAMP_MIN));
+					util_max = max(rq_util_max, uclamp_eff_value(p, UCLAMP_MAX));
+				}
+				if (!util_fits_cpu(util, util_min, util_max, cpu))
+					continue;
+			} else {
+				util = uclamp_rq_util_with(cpu_rq(cpu), util, p);
+				if (cpu_cap * 1024 <
+						util * sched_capacity_margin_up[cpu])
+					continue;
+			}
 
 			/*
 			 * Find the CPU with the maximum spare capacity in
