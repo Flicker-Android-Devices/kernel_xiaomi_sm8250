@@ -5775,6 +5775,12 @@ static unsigned long capacity_of(int cpu);
 
 bool __cpu_overutilized(int cpu, int delta)
 {
+	unsigned long rq_util_min = uclamp_rq_get(cpu_rq(cpu), UCLAMP_MIN);
+	unsigned long rq_util_max = uclamp_rq_get(cpu_rq(cpu), UCLAMP_MAX);
+
+	if (uclamp_is_used())
+		return !util_fits_cpu(cpu_util(cpu) + delta, rq_util_min, rq_util_max, cpu);
+
 	return (capacity_orig_of(cpu) * 1024) <
 		((cpu_util(cpu) + delta) * sched_capacity_margin_up[cpu]);
 }
