@@ -1093,6 +1093,19 @@ static inline unsigned int blk_rq_zone_is_seq(struct request *rq)
 {
 	return blk_queue_zone_is_seq(rq->q, blk_rq_pos(rq));
 }
+
+static inline bool blk_rq_is_seq_zoned_write(struct request *rq)
+{
+	return blk_rq_is_passthrough(rq) ? false :
+		op_is_write(req_op(rq)) &&
+		blk_queue_is_zoned(rq->q) &&
+		blk_rq_zone_is_seq(rq);
+}
+#else /* CONFIG_BLK_DEV_ZONED */
+static inline bool blk_rq_is_seq_zoned_write(struct request *rq)
+{
+	return false;
+}
 #endif /* CONFIG_BLK_DEV_ZONED */
 
 /*
