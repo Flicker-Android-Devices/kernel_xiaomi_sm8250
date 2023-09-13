@@ -9086,10 +9086,7 @@ static int fts_probe(struct spi_device *client)
 #if defined(GESTURE_MODE) && defined(CONFIG_TOUCHSCREEN_COMMON)
 	tp_common_set_double_tap_ops(&double_tap_ops);
 
-	ret = tp_common_set_fp_state_ops(&fp_state_ops);
-	if (ret < 0)
-		MI_TOUCH_LOGE(1, "%s %s: Failed to create fp_state node err=%d\n",
-			tag, __func__, ret);
+	tp_common_set_fp_state_ops(&fp_state_ops);
 
 #endif
 
