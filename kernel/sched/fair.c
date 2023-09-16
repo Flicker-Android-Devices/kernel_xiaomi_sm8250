@@ -8331,6 +8331,9 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 
 	sync_entity_load_avg(&p->se);
 
+	if (!task_util_est(p) && !uclamp_eff_value(p, UCLAMP_MIN))
+		return prev_cpu;
+
 	if (sync && (need_idle || (is_rtg && curr_is_rtg)))
 		sync = 0;
 
