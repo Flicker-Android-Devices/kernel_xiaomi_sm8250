@@ -47,6 +47,9 @@
 #define FTS_SUSPEND_LEVEL 1     /* Early-suspend level */
 #endif
 #include "focaltech_core.h"
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+#include <linux/input/tp_common.h>
+#endif
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
