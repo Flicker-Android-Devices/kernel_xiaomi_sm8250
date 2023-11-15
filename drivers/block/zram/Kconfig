@@ -44,9 +44,18 @@ config ZRAM_WRITEBACK
 
 	 See Documentation/blockdev/zram.txt for more information.
 
+config ZRAM_TRACK_ENTRY_ACTIME
+	bool "Track access time of zram entries"
+	depends on ZRAM
+	help
+	  With this feature zram tracks access time of every stored
+	  entry (page), which can be used for a more fine grained IDLE
+	  pages writeback.
+
 config ZRAM_MEMORY_TRACKING
 	bool "Track zRam block status"
 	depends on ZRAM && DEBUG_FS
+	select ZRAM_TRACK_ENTRY_ACTIME
 	help
 	  With this feature, admin can track the state of allocated blocks
 	  of zRAM. Admin could see the information via
