@@ -2050,47 +2050,27 @@ endif
 
 LINUX_INC :=	-Iinclude
 
-INCS :=		$(HDD_INC) \
-		$(SYNC_INC) \
-		$(DSC_INC) \
+INCS := -I$(WLAN_ROOT)/inc \
 		$(EPPING_INC) \
-		$(LINUX_INC) \
-		$(MAC_INC) \
-		$(SAP_INC) \
-		$(SME_INC) \
-		$(SYS_INC) \
 		$(QAL_INC) \
 		$(QDF_INC) \
 		$(WBUFF_INC) \
-		$(CDS_INC) \
 		$(CFG_INC) \
 		$(DFS_INC) \
 		$(TARGET_IF_INC) \
-		$(CLD_TARGET_IF_INC) \
 		$(OS_IF_INC) \
 		$(GLOBAL_LMAC_IF_INC) \
-		$(FTM_INC)
-
-INCS +=		$(WMA_INC) \
-		$(UAPI_INC) \
-		$(COMMON_INC) \
+		$(FTM_INC) \
 		$(WMI_INC) \
 		$(FWLOG_INC) \
-		$(TXRX_INC) \
-		$(OL_INC) \
 		$(CDP_INC) \
 		$(PKTLOG_INC) \
-		$(HTT_INC) \
 		$(INIT_DEINIT_INC) \
 		$(SCHEDULER_INC) \
 		$(REGULATORY_INC) \
 		$(HTC_INC) \
-		$(DFS_INC) \
 		$(WCFG_INC) \
-		$(TXRX3.0_INC)
-
-INCS +=		$(HIF_INC) \
-		$(BMI_INC) \
+		$(HIF_INC) \
 		$(CMN_SYS_INC)
 
 ifeq ($(CONFIG_LITHIUM), y)
@@ -2107,49 +2087,19 @@ INCS +=		$(CP_STATS_OS_IF_INC)
 INCS +=		$(CP_STATS_TGT_INC)
 INCS +=		$(CP_STATS_DISPATCHER_INC)
 INCS += 	$(COMP_CP_STATS_DISPATCHER_INC)
-################ INTEROP ISSUES AP ################
-INCS +=		$(INTEROP_ISSUES_AP_OS_IF_INC)
-INCS +=		$(INTEROP_ISSUES_AP_TGT_INC)
-INCS +=		$(INTEROP_ISSUES_AP_DISPATCHER_INC)
-INCS +=		$(INTEROP_ISSUES_AP_CORE_INC)
-################ NAN POS ################
-INCS +=		$(NAN_CORE_INC)
-INCS +=		$(NAN_UCFG_INC)
-INCS +=		$(NAN_TGT_INC)
-INCS +=		$(NAN_OS_IF_INC)
 ##########################################
 INCS +=		$(UMAC_OBJMGR_INC)
 INCS +=		$(UMAC_MGMT_TXRX_INC)
-INCS +=		$(PMO_INC)
-INCS +=		$(P2P_INC)
-INCS +=		$(POLICY_MGR_INC)
 INCS +=		$(TARGET_INC)
-INCS +=		$(TDLS_INC)
 INCS +=		$(UMAC_SER_INC)
 INCS +=		$(NLINK_INC) \
 		$(PTT_INC) \
 		$(WLAN_LOGGING_INC)
 
-INCS +=		$(PLD_INC)
-INCS +=		$(OCB_INC)
-
-INCS +=		$(IPA_INC)
 INCS +=		$(UMAC_SM_INC)
 INCS +=		$(UMAC_MLME_INC)
-INCS +=		$(MLME_INC)
-INCS +=		$(FWOL_INC)
-INCS +=		$(BLM_INC)
-
-ifeq ($(CONFIG_REMOVE_PKT_LOG), n)
-INCS +=		$(PKTLOG_INC)
-endif
 
 INCS +=		$(HOST_DIAG_LOG_INC)
-
-INCS +=		$(DISA_INC)
-INCS +=		$(ACTION_OUI_INC)
-INCS +=		$(PKT_CAPTURE_INC)
-INCS +=		$(FTM_TIME_SYNC_INC)
 
 INCS +=		$(UMAC_DISP_INC)
 INCS +=		$(UMAC_SCAN_INC)
