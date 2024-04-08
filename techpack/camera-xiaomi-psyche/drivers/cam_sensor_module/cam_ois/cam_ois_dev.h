@@ -25,7 +25,6 @@
 #define DEFINE_MSM_MUTEX(mutexname) \
 	static struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)
 
-#define ENABLE_OIS_EIS
 #define OIS_DATA_ADDR 0x8A
 
 enum cam_ois_state {
@@ -84,12 +83,12 @@ struct cam_ois_intf_params {
 	struct cam_req_mgr_kmd_ops ops;
 	struct cam_req_mgr_crm_cb *crm_cb;
 };
-#ifdef ENABLE_OIS_EIS
+
 struct ois_data_eis_t {
     uint64_t data_timestamp;
     uint8_t  data[52];
 };
-#endif
+
 /**
  * struct cam_ois_ctrl_t - OIS ctrl private data
  * @device_name     :   ois device_name
@@ -102,7 +101,6 @@ struct ois_data_eis_t {
  * @bridge_intf     :   bridge interface params
  * @i2c_init_data   :   ois i2c init settings
  * @i2c_mode_data   :   ois i2c mode settings
- * @i2c_time_data   :   ois i2c time write settings
  * @i2c_calib_data  :   ois i2c calib settings
  * @ois_device_type :   ois device type
  * @cam_ois_state   :   ois_device_state
@@ -129,7 +127,6 @@ struct cam_ois_ctrl_t {
 	struct i2c_settings_array i2c_init_data;
 	struct i2c_settings_array i2c_calib_data;
 	struct i2c_settings_array i2c_mode_data;
-	struct i2c_settings_array i2c_time_data;
 	enum msm_camera_device_type_t ois_device_type;
 	enum cam_ois_state cam_ois_state;
 	char ois_name[32];
@@ -140,21 +137,8 @@ struct cam_ois_ctrl_t {
 	struct i2c_settings_array i2c_pre_init_data;
 	struct i2c_settings_array i2c_post_init_data;
 	uint8_t is_ois_post_init;
-	uint8_t is_ois_pre_init;
-	//xiaomi add end
-#ifdef ENABLE_OIS_EIS
+	uint8_t is_ois_pre_init; //xiaomi add
 	struct ois_data_eis_t ois_data;
-#endif
 };
 
-/**
- * @brief : API to register OIS hw to platform framework.
- * @return struct platform_device pointer on on success, or ERR_PTR() on error.
- */
-int cam_ois_driver_init(void);
-
-/**
- * @brief : API to remove OIS Hw from platform framework.
- */
-void cam_ois_driver_exit(void);
 #endif /*_CAM_OIS_DEV_H_ */
