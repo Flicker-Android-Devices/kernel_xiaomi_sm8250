@@ -122,8 +122,8 @@ struct cam_ois_opcode {
 	uint8_t  fw_addr_type; //Xiaomi add
 	uint8_t  is_addr_increase; //Xiaomi add
 	uint8_t  is_addr_indata; //Xiaomi add
-        uint8_t  fwversion;
-        uint32_t fwchecksumsize;
+    uint8_t  fwversion;
+    uint32_t fwchecksumsize;
 	uint32_t fwchecksum;
 } __attribute__((packed));
 

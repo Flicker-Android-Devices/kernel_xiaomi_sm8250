@@ -280,7 +280,6 @@ static int32_t cam_ois_platform_driver_probe(
 	INIT_LIST_HEAD(&(o_ctrl->i2c_init_data.list_head));
 	INIT_LIST_HEAD(&(o_ctrl->i2c_calib_data.list_head));
 	INIT_LIST_HEAD(&(o_ctrl->i2c_mode_data.list_head));
-	INIT_LIST_HEAD(&(o_ctrl->i2c_time_data.list_head));
 	INIT_LIST_HEAD(&(o_ctrl->i2c_pre_init_data.list_head));
 	INIT_LIST_HEAD(&(o_ctrl->i2c_post_init_data.list_head));
 	mutex_init(&(o_ctrl->ois_mutex));
@@ -387,7 +386,7 @@ static struct i2c_driver cam_ois_i2c_driver = {
 static struct cam_ois_registered_driver_t registered_driver = {
 	0, 0};
 
-int cam_ois_driver_init(void)
+static int __init cam_ois_driver_init(void)
 {
 	int rc = 0;
 
@@ -410,7 +409,7 @@ int cam_ois_driver_init(void)
 	return rc;
 }
 
-void cam_ois_driver_exit(void)
+static void __exit cam_ois_driver_exit(void)
 {
 	if (registered_driver.platform_driver)
 		platform_driver_unregister(&cam_ois_platform_driver);
