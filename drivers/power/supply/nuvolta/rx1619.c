@@ -1,4 +1,12 @@
-
+/**
+ * @file   rx1619.c
+ * @author  <colin>
+ * @date   2019-04-09
+ *
+ * @brief
+ *
+ *
+ */
 #include <linux/module.h>
 #include <linux/alarmtimer.h>
 #include <linux/ktime.h>
@@ -44,8 +52,6 @@
 #define PRIVATE_TX_HW_ID_CMD 0x8b
 #define FW_ERROR_CODE 0xFE
 #define FW_EMPTY_CODE 0xFF
-#define TAPER_SOC 95
-
 /*adapter type*/
 #define ADAPTER_NONE 0x00
 #define ADAPTER_SDP 0x01
@@ -60,7 +66,7 @@
 #define ADAPTER_ZIMI_CAR_POWER 0x0b
 #define ADAPTER_XIAOMI_PD_40W 0x0c
 #define ADAPTER_VOICE_BOX 0x0d
-#define ADAPTER_XIAOMI_PD_45W 0x0e
+#define ADAPTER_XIAOMI_PD_50W 0x0e
 #define ADAPTER_XIAOMI_PD_60W 0x0f
 #define ADAPTER_XIAOMI_PD_100W 0x10
 
@@ -103,7 +109,7 @@
 #define EXCHANGE_5V 0x1
 #define EXCHANGE_15V 0x0
 #define EXCHANGE_10V 0x1
-#define ICL_EXCHANGE_COUNT 2 /*5 = 1min */
+#define ICL_EXCHANGE_COUNT 2 /*5 = 1min*/
 #define LIMIT_EPP_IOUT 500
 #define LIMIT_BPP_IOUT 500
 #define HIGH_THERMAL_LEVEL_THR 12
@@ -134,6 +140,7 @@
 #define ID_CMD 0x3b
 #define AUTH_CMD 0x86
 #define UUID_CMD 0x90
+#define COMM_CMD 0x12
 
 u8 fod_param[8] = { 0x44, 0x64, 0x44, 0x78, 0x3A, 0x67, 0x37, 0x67 };
 
@@ -148,12 +155,12 @@ static u8 g_fw_tx_id;
 static u8 g_hw_id_h, g_hw_id_l;
 static u8 g_epp_or_bpp = BPP_MODE;
 static u8 g_USB_TYPE = 0;
-static bool g_rx1619_restart_flag;
+static int g_current_now = DC_LOW_CURRENT;
+static bool g_rx1619_restart_flag = false;
 static bool g_rx1619_first_flag;
 static u8 rx_bin_project_id_h;
 static u8 rx_bin_project_id_l;
 static bool is_nvt_rx;
-static bool need_unconfig_pg;
 
 static u32 g_fw_data_lenth;
 static u8 boot_fw_version;
@@ -188,7 +195,6 @@ struct rx1619_chg {
 	unsigned int power_good_irq;
 	unsigned int enable_gpio;
 	unsigned int chip_enable;
-	unsigned int reverse_boost_enable_gpio;
 	int online;
 	struct pinctrl *rx_pinctrl;
 	struct pinctrl_state *rx_gpio_active;
@@ -221,11 +227,9 @@ struct rx1619_chg {
 	struct power_supply *usb_psy;
 	struct power_supply *pc_port_psy;
 	struct power_supply *ln_psy;
-	struct power_supply *bbc_psy;
 	struct alarm reverse_dping_alarm;
 	struct alarm reverse_chg_alarm;
 	struct alarm cmd_timeout_alarm;
-	struct alarm reverse_test_ready_alarm;
 	int epp;
 	int auth;
 	int op_mode;
@@ -276,8 +280,6 @@ struct rx1619_chg {
 	int is_otg_insert;
 	int is_pan_tx;
 	bool disable_bq;
-	bool is_urd_device;
-	bool wait_for_reverse_test;
 	struct votable *fcc_votable;
 };
 
@@ -550,6 +552,18 @@ void rx1619_request_uuid(struct rx1619_chg *chip, int is_epp)
 	rx1619_write(chip, AP_SENT_DATA_OK, REG_AP_RX_COMM); //0x8b sent BLEOK
 }
 
+void rx1619_retry_id_auth(struct rx1619_chg *chip)
+{
+	rx1619_write(chip, PRIVATE_ID_CMD, REG_RX_SENT_CMD);
+	rx1619_write(chip, AP_SENT_DATA_OK, REG_AP_RX_COMM);
+}
+
+void rx1619_send_device_auth(struct rx1619_chg *chip)
+{
+	rx1619_write(chip, PRIVATE_USB_TYPE_CMD, REG_RX_SENT_CMD);
+	rx1619_write(chip, AP_SENT_DATA_OK, REG_AP_RX_COMM);
+}
+
 void rx1619_sent_tx_mac(struct rx1619_chg *chip)
 {
 	int64_t ble_mac = 0;
@@ -638,7 +652,6 @@ static int rx_get_property_names(struct rx1619_chg *chip)
 
 	return 0;
 }
-
 /*
 reverse charging function
 */
@@ -695,6 +708,7 @@ unsigned int rx1619_get_tx_iout(struct rx1619_chg *chip)
 	return tx_iout;
 }
 
+
 unsigned int rx1619_get_tx_vout(struct rx1619_chg *chip)
 {
 	u8  data = 0;
@@ -738,8 +752,6 @@ power limit 0x03
 #define POWER_LIM 0x3
 #define CONFIGURE_CNF 0x4
 #define CONFIGURE_ERR 0x5
-#define REVERSE_TEST_DONE 0x06
-#define REVERSE_TEST_READY 0x7
 
 unsigned char rx1619_get_tx_phase(struct rx1619_chg *chip)
 {
@@ -844,7 +856,8 @@ bool rx1619_is_vout_on(struct rx1619_chg *chip)
 
 	dev_err(chip->dev, "[rx1619] [%s] Vout = %d \n", __func__, voltage);
 
-	if ((voltage > MIN_VOUT) && (voltage < MAX_VOUT)) {
+	if ((voltage > MIN_VOUT) && (voltage < MAX_VOUT)) //4V~15V
+	{
 		vout_status = true;
 	} else {
 		vout_status = false;
@@ -857,6 +870,16 @@ bool rx1619_is_vout_on(struct rx1619_chg *chip)
 #define REVERSE_PARAM_CMD_ADDR 0x0000
 #define REVERSE_PARAM_MODE_ADDE 0x0001
 #define REVERSE_PARAM_IIN_ADDR 0x0002
+
+static void rx1619_set_reverse_parameter(struct rx1619_chg *chip, u8 mode,
+					 u8 iin)
+{
+	dev_info(chip->dev, "mode: %d, iin:%d\n", mode, iin);
+	rx1619_write(chip, REVERSE_PARAM_CMD, REVERSE_PARAM_CMD_ADDR);
+	rx1619_write(chip, mode, REVERSE_PARAM_MODE_ADDE);
+	rx1619_write(chip, iin, REVERSE_PARAM_IIN_ADDR);
+	return;
+}
 
 #define REVERSE_FOD_COMPENSATION_ADDR 0x0003
 #define REVERSE_FOD_THRESHOLD_ADDR 0x0004
@@ -1042,7 +1065,7 @@ static bool rx1619_update_fw_confirm_data(struct rx1619_chg *chip, u8 area,
 	rx1619_write(chip, 0x5a, 0x0001);
 	rx1619_write(chip, 0xa5, 0x0003);
 
-	//      rx1619_write(chip, 0x19, 0x0018);
+	//	rx1619_write(chip, 0x19, 0x0018);
 	rx1619_write(chip, 0x10, 0x1000);
 	rx1619_write(chip, 0x3e, 0x1130);
 	/************prepare_for_mtp_write************/
@@ -1180,7 +1203,7 @@ static bool rx1619_download_firmware(struct rx1619_chg *chip, u8 area)
 	rx1619_write(chip, 0x5a, 0x0001);
 	rx1619_write(chip, 0xa5, 0x0003);
 
-	//      rx1619_write(chip, 0x19, 0x0018);
+	//	rx1619_write(chip, 0x19, 0x0018);
 	rx1619_write(chip, 0x10, 0x1000);
 	rx1619_write(chip, 0x3e, 0x1130);
 	/************prepare_for_mtp_write************/
@@ -1751,28 +1774,52 @@ void rx1619_set_pmi_icl(struct rx1619_chg *chip, int mA)
 		if (!chip->usb_psy)
 			chip->usb_psy = power_supply_get_by_name("usb");
 
-		if (!chip->usb_psy) {
-			dev_err(chip->dev, "no usb_psy,return\n");
-			return;
-		}
-		power_supply_set_property(chip->usb_psy,
-					  POWER_SUPPLY_PROP_CURRENT_MAX, &val);
+		if (chip->usb_psy)
+			power_supply_set_property(chip->usb_psy,
+						  POWER_SUPPLY_PROP_CURRENT_MAX,
+						  &val);
+
 	} else {
-		/* set bbc icl only */
 		if (!chip->dc_psy)
 			chip->dc_psy = power_supply_get_by_name("dc");
 
-		if (!chip->dc_psy) {
-			dev_err(chip->dev, "no dc_psy,return\n");
-			return;
-		}
-
-		power_supply_set_property(chip->dc_psy,
-					  POWER_SUPPLY_PROP_CURRENT_MAX, &val);
+		if (chip->dc_psy)
+			power_supply_set_property(chip->dc_psy,
+						  POWER_SUPPLY_PROP_CURRENT_MAX,
+						  &val);
 	}
 
 	dev_info(chip->dev, "[rx1619] [%s] [rx1619] set icl: %d\n", __func__,
 		 val.intval);
+}
+
+void rx1619_get_pmi_icl(struct rx1619_chg *chip)
+{
+	union power_supply_propval val = {
+		0,
+	};
+
+	if (chip->wireless_by_usbin) {
+		if (!chip->usb_psy)
+			chip->usb_psy = power_supply_get_by_name("usb");
+
+		if (chip->usb_psy)
+			power_supply_get_property(chip->usb_psy,
+						  POWER_SUPPLY_PROP_CURRENT_MAX,
+						  &val);
+	} else {
+		if (!chip->dc_psy)
+			chip->dc_psy = power_supply_get_by_name("dc");
+
+		if (chip->dc_psy)
+			power_supply_get_property(chip->dc_psy,
+						  POWER_SUPPLY_PROP_CURRENT_MAX,
+						  &val);
+	}
+
+	dev_info(chip->dev, "[rx1619] [%s] [rx1619] get icl: %d\n", __func__,
+		 val.intval);
+	g_current_now = val.intval;
 }
 
 void set_usb_type_current(struct rx1619_chg *chip, u8 data)
@@ -1852,6 +1899,11 @@ void set_usb_type_current(struct rx1619_chg *chip, u8 data)
 	case ADAPTER_XIAOMI_QC3: //QC3-27W(20W)
 	case ADAPTER_XIAOMI_PD: //PD-27W(20W)
 	case ADAPTER_ZIMI_CAR_POWER: //PD-27W(20W)
+		if (chip->op_mode != LN8282_OPMODE_SWITCHING) {
+			dev_info(chip->dev,
+				 "[20W]not switch mode, don't rise voltage \n");
+			break;
+		}
 		/*
 		chip->batt_psy = power_supply_get_by_name("battery");
 		if (!chip->batt_psy) {
@@ -1874,7 +1926,7 @@ void set_usb_type_current(struct rx1619_chg *chip, u8 data)
 				POWER_SUPPLY_PROP_WIRELESS_CP_EN, &val);
 			msleep(200);
 		}
-		/* for usb-in design, set max usb icl to 1.8A */
+		/* for usb-in design, set max usb icl to 1.8A*/
 		for (i = 0; i <= 10; i++) {
 			uA = (USB_20W_PLUS_BASE_CURRENT_UA + 100000 * i);
 			rx1619_set_pmi_icl(chip, uA);
@@ -1886,10 +1938,15 @@ void set_usb_type_current(struct rx1619_chg *chip, u8 data)
 		break;
 
 	case ADAPTER_XIAOMI_PD_40W: //40w
-	case ADAPTER_VOICE_BOX:
-	case ADAPTER_XIAOMI_PD_45W:
+	case ADAPTER_XIAOMI_PD_50W:
 	case ADAPTER_XIAOMI_PD_60W:
 	case ADAPTER_XIAOMI_PD_100W:
+	case ADAPTER_VOICE_BOX:
+		if (chip->op_mode != LN8282_OPMODE_SWITCHING) {
+			dev_info(chip->dev,
+				 "[30W]not switch mode, don't rise voltage \n");
+			break;
+		}
 		/*
 		chip->batt_psy = power_supply_get_by_name("battery");
 		if (!chip->batt_psy) {
@@ -1905,29 +1962,18 @@ void set_usb_type_current(struct rx1619_chg *chip, u8 data)
 		chip->target_vol = ADAPTER_EPP_MI_VOL;
 		rx1619_set_pmi_icl(chip, 1000000);
 		msleep(100);
-		dev_info(chip->dev, "[30W]ready to enable cp\n");
-		if (chip->is_urd_device) {
-			for (i = 0; i <= 5; i++) {
-				uA = (USB_20W_PLUS_BASE_CURRENT_UA +
-				      100000 * i);
-				rx1619_set_pmi_icl(chip, uA);
-				msleep(100);
-			}
-		} else {
-			/* for usb-in design, set max usb icl to 1.8A */
-			for (i = 0; i <= 4; i++) {
-				uA = (USB_20W_PLUS_BASE_CURRENT_UA +
-				      200000 * i);
-				rx1619_set_pmi_icl(chip, uA);
-				msleep(100);
-			}
-		}
 		if (chip->epp && chip->auth && chip->wireless_psy) {
 			val.intval = 1;
 			power_supply_set_property(
 				chip->wireless_psy,
 				POWER_SUPPLY_PROP_WIRELESS_CP_EN, &val);
 			msleep(200);
+		}
+		/* for usb-in design, set max usb icl to 1.8A*/
+		for (i = 0; i <= 4; i++) {
+			uA = (USB_20W_PLUS_BASE_CURRENT_UA + 200000 * i);
+			rx1619_set_pmi_icl(chip, uA);
+			msleep(100);
 		}
 		chip->target_curr = uA;
 		chip->last_icl = chip->target_curr;
@@ -2007,25 +2053,24 @@ void get_usb_type_current(struct rx1619_chg *chip, u8 data)
 	case ADAPTER_XIAOMI_PD: //PD-27W(20W)
 	case ADAPTER_ZIMI_CAR_POWER: //PD-27W(20W)
 		chip->target_vol = ADAPTER_EPP_MI_VOL;
-		/* for usb-in design, set max usb icl to 1.8A */
+		/* for usb-in design, set max usb icl to 1.8A*/
 		chip->target_curr = USB_20W_PLUS_CURRENT_UA; //1.8A
 		break;
 
 	case ADAPTER_XIAOMI_PD_40W: //40w
-	case ADAPTER_VOICE_BOX:
-	case ADAPTER_XIAOMI_PD_45W:
+	case ADAPTER_XIAOMI_PD_50W:
 	case ADAPTER_XIAOMI_PD_60W:
 	case ADAPTER_XIAOMI_PD_100W:
+	case ADAPTER_VOICE_BOX:
 		chip->target_vol = ADAPTER_EPP_MI_VOL;
-		/* for usb-in design, set max usb icl to 1.8A */
-		chip->target_curr = 1500000; //1.8A
+		/* for usb-in design, set max usb icl to 1.8A*/
+		chip->target_curr = USB_20W_PLUS_CURRENT_UA; //1.8A
 		break;
 
 	default:
 		break;
 	}
 }
-
 static void rx_set_charging_param(struct rx1619_chg *chip)
 {
 	union power_supply_propval val = {
@@ -2077,7 +2122,7 @@ static void rx_set_charging_param(struct rx1619_chg *chip)
 		chip->dev,
 		"soc:%d,vol_now:%d,cur_now:%d,health:%d, bat_status:%d, dc_level:%d\n",
 		soc, vol_now, cur_now, health, batt_sts, dc_level);
-	/*epp 10W */
+	/*epp 10W*/
 	if ((g_USB_TYPE >= 6 && g_USB_TYPE <= 7) && (chip->epp)) {
 		dev_info(chip->dev, "standard epp logic\n");
 		if (soc >= 97)
@@ -2096,8 +2141,14 @@ static void rx_set_charging_param(struct rx1619_chg *chip)
 			msleep(100);
 		}
 	}
-	/*epp plus */
+	/*epp plus*/
 	if (g_USB_TYPE >= 9) {
+		if (chip->op_mode != LN8282_OPMODE_SWITCHING) {
+			dev_info(chip->dev,
+				 "not switch mode, don't adjust voltage \n");
+			goto out;
+		}
+
 		if (chip->is_pan_tx) {
 			schedule_delayed_work(&chip->pan_tx_work,
 					      msecs_to_jiffies(0));
@@ -2160,15 +2211,14 @@ static void rx_set_charging_param(struct rx1619_chg *chip)
 		/* function end */
 		switch (chip->status) {
 		case NORMAL_MODE:
-			if (soc >= TAPER_SOC) {
+			if (soc >= 97) {
 				//chip->target_curr = min(DC_BPP_CURRENT, chip->target_curr);
-				chip->target_vol = EPP_VOL_THRESHOLD;
 				dev_info(chip->dev, "set curr to %d\n",
 					 chip->target_curr);
 			}
 			if (soc >= FULL_SOC) {
 				chip->status = TAPER_MODE;
-				chip->target_vol = EPP_VOL_THRESHOLD;
+				//chip->target_vol = EPP_VOL_THRESHOLD;
 				//chip->target_curr = min(DC_SDP_CURRENT, chip->target_curr);
 				dev_info(
 					chip->dev,
@@ -2177,7 +2227,7 @@ static void rx_set_charging_param(struct rx1619_chg *chip)
 			}
 			break;
 		case TAPER_MODE:
-			chip->target_vol = EPP_VOL_THRESHOLD;
+			//chip->target_vol = EPP_VOL_THRESHOLD;
 			//chip->target_curr = min(DC_SDP_CURRENT, chip->target_curr);
 
 			dev_info(
@@ -2329,7 +2379,6 @@ static void rx1619_rx_first_boot(struct work_struct *work)
 	if (chip->wip_psy)
 		power_supply_changed(chip->wip_psy);
 }
-
 #define CHARGING_PERIOD_S 10
 static void rx_monitor_work(struct work_struct *work)
 {
@@ -2372,11 +2421,14 @@ static void rx1619_fw_download_work(struct work_struct *work)
 		    g_fw_tx_id == FW_ERROR_CODE ||
 		    g_fw_boot_id == FW_ERROR_CODE)
 			is_valid_fw = false;
-		chip->chip_ok = rx1619_check_i2c_is_ok(chip);
+
 		chip->fw_version = g_fw_rx_id;
-		dev_info(chip->dev,
-			 "[rx1619] %s: FW Version is 0x%x chip_ok:%d\n",
-			 __func__, g_fw_rx_id, chip->chip_ok);
+		dev_info(chip->dev, "[rx1619] %s: FW Version is 0x%x\n",
+			 __func__, g_fw_rx_id);
+		if (g_fw_rx_id)
+			chip->chip_ok = 1;
+		else
+			chip->chip_ok = 0;
 
 		if (is_valid_fw && (g_fw_rx_id >= FW_VERSION)) {
 			dev_info(
@@ -2575,10 +2627,11 @@ static void rx1619_pan_tx_work(struct work_struct *work)
 
 	dev_info(
 		chip->dev,
-		"chip->status:0x%x,adapter_vol=%d,icl_curr=%d,last_vin=%d,last_icl=%d, bq_dis:%d\n",
+		"di->status:0x%x,adapter_vol=%d,icl_curr=%d,last_vin=%d,last_icl=%d, bq_dis:%d\n",
 		chip->status, chip->target_vol, chip->target_curr,
 		chip->last_vin, chip->last_icl, chip->disable_bq);
 }
+
 static int rx1619_get_effective_fcc(struct rx1619_chg *chip)
 {
 	int effective_fcc_val = 0;
@@ -2597,14 +2650,6 @@ static int rx1619_get_effective_fcc(struct rx1619_chg *chip)
 
 #define VOICE_LIMIT_FCC_VOTER "VOICE_LIMIT_FCC_VOTER"
 #define VOICE_LIMIT_FCC_1A_VOTER "VOICE_LIMIT_FCC_1A_VOTER"
-#define VOICE_CURRENT_LIMIT_HOT_UPPER_TEMP 402
-#define VOICE_CURRENT_LIMIT_HOT_LOWER_TEMP 400
-#define VOICE_CURRENT_LIMIT_WARM_UPPER_TEMP 375
-#define VOICE_CURRENT_LIMIT_WARM_LOWER_TEMP 367
-#define VOICE_FCC_HOT_LIMIT_MA 1000
-#define VOICE_FCC_WARM_LIMIT_MA 2600
-#define VOICE_MAX_ICL_UA 2000000
-
 static void rx1619_voice_tx_work(struct work_struct *work)
 {
 	struct rx1619_chg *chip =
@@ -2625,7 +2670,7 @@ static void rx1619_voice_tx_work(struct work_struct *work)
 	};
 
 	chip->target_vol = ADAPTER_EPP_MI_VOL;
-	chip->target_curr = VOICE_MAX_ICL_UA;
+	chip->target_curr = 2000000;
 
 	if (chip->batt_psy) {
 		power_supply_get_property(chip->batt_psy,
@@ -2650,29 +2695,29 @@ static void rx1619_voice_tx_work(struct work_struct *work)
 		 "soc:%d, dc_level:%d, bat_status:%d, batt_temp:%d\n", soc,
 		 dc_level, batt_sts, batt_temp);
 
-	if (batt_temp >= VOICE_CURRENT_LIMIT_HOT_UPPER_TEMP) {
+	if (batt_temp >= 402) {
 		dev_info(chip->dev, "[voice]Tbat limit fcc 1A\n");
 		effective_fcc = rx1619_get_effective_fcc(chip);
 		if (chip->fcc_votable) {
-			effective_fcc = VOICE_FCC_HOT_LIMIT_MA;
+			effective_fcc = 1000;
 			vote(chip->fcc_votable, VOICE_LIMIT_FCC_1A_VOTER, true,
 			     effective_fcc * 1000);
 		}
-	} else if (batt_temp < VOICE_CURRENT_LIMIT_HOT_LOWER_TEMP) {
+	} else if (batt_temp < 400) {
 		if (chip->fcc_votable)
 			vote(chip->fcc_votable, VOICE_LIMIT_FCC_1A_VOTER, false,
 			     0);
 	}
 
-	if (batt_temp >= VOICE_CURRENT_LIMIT_WARM_UPPER_TEMP) {
+	if (batt_temp >= 375) {
 		dev_info(chip->dev, "[voice]Tbat limit fcc 3.2A\n");
 		effective_fcc = rx1619_get_effective_fcc(chip);
 		if (chip->fcc_votable) {
-			effective_fcc = VOICE_FCC_WARM_LIMIT_MA;
+			effective_fcc = 2600;
 			vote(chip->fcc_votable, VOICE_LIMIT_FCC_VOTER, true,
 			     effective_fcc * 1000);
 		}
-	} else if (batt_temp < VOICE_CURRENT_LIMIT_WARM_LOWER_TEMP) {
+	} else if (batt_temp < 367) {
 		if (chip->fcc_votable)
 			vote(chip->fcc_votable, VOICE_LIMIT_FCC_VOTER, false,
 			     0);
@@ -2686,7 +2731,7 @@ static void rx1619_voice_tx_work(struct work_struct *work)
 
 	switch (chip->status) {
 	case NORMAL_MODE:
-		if (soc >= TAPER_SOC)
+		if (soc >= 95)
 			chip->status = TAPER_MODE;
 		break;
 	case TAPER_MODE:
@@ -2836,7 +2881,7 @@ static void rx1619_train_tx_work(struct work_struct *work)
 
 	if (dc_level) {
 		chip->target_vol = ADAPTER_EPP_QC3_VOL;
-		if (dc_level < 3)
+		if (dc_level < 2)
 			chip->target_curr = 600000; //11V * 600mA
 		else
 			chip->target_curr = 450000; //11V * 450mA
@@ -3059,7 +3104,6 @@ static void reverse_dping_state_set_work(struct work_struct *work)
 }
 
 /* power good work */
-#define REVERSE_TEST_READY_CHECK_DELAY_MS 8000
 static void rx1619_wpc_det_work(struct work_struct *work)
 {
 	struct rx1619_chg *chip =
@@ -3090,26 +3134,19 @@ static void rx1619_wpc_det_work(struct work_struct *work)
 			cancel_delayed_work(&chip->dc_check_work);
 			chip->power_good_flag = 0;
 			chip->ss = 2;
-			power_supply_set_property(
-				chip->wireless_psy,
-				POWER_SUPPLY_PROP_WIRELESS_CP_EN, &val);
+			val.intval = 0;
+			chip->ln_psy = power_supply_get_by_name("lionsemi");
+			if (chip->ln_psy)
+				power_supply_set_property(
+					chip->ln_psy,
+					POWER_SUPPLY_PROP_RESET_DIV_2_MODE,
+					&val);
 		}
 		power_supply_set_property(
 			chip->wireless_psy,
 			POWER_SUPPLY_PROP_WIRELESS_POWER_GOOD_EN, &val);
-
-		if (chip->wait_for_reverse_test && !chip->power_good_flag) {
-			msleep(2000);
-			rx_set_reverse_chg_mode(chip, true);
-			dev_err(chip->dev,
-				"[ factory reverse test ] wait for factory reverse charging test, power good low\n");
-			alarm_start_relative(
-				&chip->reverse_test_ready_alarm,
-				ms_to_ktime(REVERSE_TEST_READY_CHECK_DELAY_MS));
-		}
 	}
 }
-
 static void rx1619_enable_aicl(struct rx1619_chg *chip, bool enable)
 {
 	union power_supply_propval val = {
@@ -3127,7 +3164,6 @@ static void rx1619_enable_aicl(struct rx1619_chg *chip, bool enable)
 	}
 	return;
 }
-
 /************AP->RX************/
 //AP set Vout = 0x80
 //AP set Iout = 0x81
@@ -3178,13 +3214,18 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 	u8 tx_status, tx_phase;
 	u8 ble_flag;
 	u8 err_cmd;
+	static int retry;
+	static int retry_id;
 	int rc;
 	int cnt;
-	int fc_flag = 0;
-	int vol = 0;
+	union power_supply_propval cp_val = {
+		0,
+	};
 	union power_supply_propval val = {
 		0,
 	};
+	int fc_flag = 0;
+	int vol = 0;
 
 	struct rx1619_chg *chip =
 		container_of(work, struct rx1619_chg, wireless_int_work.work);
@@ -3228,7 +3269,6 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 				if (tx_status == REVERSE_CHG_TX_SWITCH_DONE)
 					dev_err(chip->dev,
 						"reverse restart because of otg insertion\n");
-
 				break;
 			case TRANSFER:
 				//cancel_delayed_work(&chip->reverse_chg_state_work);
@@ -3237,7 +3277,7 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 					dev_err(chip->dev,
 						"Couldn't cancel reverse_dping_alarm\n");
 				pm_stay_awake(chip->dev);
-				/* set reverse charging state to started */
+				/* set reverse charging state to started*/
 				chip->is_reverse_chg = 4;
 				schedule_delayed_work(
 					&chip->reverse_sent_state_work, 0);
@@ -3252,17 +3292,6 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 
 			case CONFIGURE_ERR:
 				dev_err(chip->dev, "tx mode CONFIGURE_ERR\n");
-				break;
-			case REVERSE_TEST_DONE:
-				rx_set_reverse_chg_mode(chip, false);
-				chip->wait_for_reverse_test = false;
-				dev_err(chip->dev,
-					"[ factory reverse test ] receiver reverse test done\n");
-				break;
-			case REVERSE_TEST_READY:
-				dev_err(chip->dev,
-					"[ factory reverse test ] receiver reverse test ready, cancel timer\n");
-				alarm_cancel(&chip->reverse_test_ready_alarm);
 				break;
 			default:
 				dev_err(chip->dev, "tx phase invalid\n");
@@ -3331,6 +3360,20 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 			dev_info(chip->dev,
 				 "[%s] EPP--10mA and epp max power is %d\n",
 				 __func__, chip->epp_max_power);
+			if (chip->wireless_psy) {
+				cp_val.intval = 2;
+				power_supply_set_property(
+					chip->wireless_psy,
+					POWER_SUPPLY_PROP_DIV_2_MODE, &cp_val);
+				msleep(10);
+				power_supply_get_property(
+					chip->wireless_psy,
+					POWER_SUPPLY_PROP_DIV_2_MODE, &cp_val);
+				chip->op_mode = cp_val.intval;
+				dev_info(chip->dev,
+					 "loop ln8282 set switch and get: %d\n",
+					 chip->op_mode);
+			}
 			msleep(50);
 
 			if (chip->op_mode == LN8282_OPMODE_SWITCHING) {
@@ -3363,8 +3406,7 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 			__func__, g_hw_id_h, g_hw_id_l, g_fw_rx_id, g_fw_tx_id,
 			g_epp_or_bpp);
 		rx1619_set_fod_param(chip, 0x1);
-		if (!chip->is_urd_device)
-			rx1619_enable_aicl(chip, false);
+		rx1619_enable_aicl(chip, false);
 		break;
 
 	case 0x02: //null
@@ -3406,6 +3448,7 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 			     REG_RX_SENT_CMD); //0x86 authen req
 		rx1619_write(chip, AP_SENT_DATA_OK, REG_AP_RX_COMM);
 		dev_err(chip->dev, "[rx1619] [%s] ID OK! \n", __func__);
+
 		break;
 
 	case 0x05: //sha one ok
@@ -3415,11 +3458,20 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 		rx1619_read(chip, &g_shaone_data_h, REG_RX_REV_DATA1); //0x0021
 		rx1619_read(chip, &g_shaone_data_l, REG_RX_REV_DATA2); //0x0022
 
-		rx1619_request_uuid(chip, chip->epp);
-		//rx1619_write(chip, PRIVATE_USB_TYPE_CMD, REG_RX_SENT_CMD);//0x87 usb type req
-		//rx1619_write(chip, AP_SENT_DATA_OK, REG_AP_RX_COMM);
-		dev_info(chip->dev, "[rx1619] [%s] SHA ONE OK! \n", __func__);
-		chip->auth = 1;
+		dev_err(chip->dev, "[%s] aqin sha one value 0x%x,0x%x\n",
+			__func__, g_shaone_data_h, g_shaone_data_l);
+		if (g_shaone_data_h == 1) {
+			rx1619_request_uuid(chip, chip->epp);
+			//rx1619_write(chip, PRIVATE_USB_TYPE_CMD, REG_RX_SENT_CMD);//0x87 usb type req
+			//rx1619_write(chip, AP_SENT_DATA_OK, REG_AP_RX_COMM);
+			dev_info(chip->dev, "[rx1619] [%s] SHA ONE OK! \n",
+				 __func__);
+			chip->auth = 1;
+		} else {
+			dev_info(chip->dev, "[rx1619] [%s] SHA failed ! \n",
+				 __func__);
+			chip->auth = 0;
+		}
 		if (!chip->epp)
 			alarm_start_relative(&chip->cmd_timeout_alarm,
 					     ms_to_ktime(CMD_TIMEOUT_DELAY_MS));
@@ -3435,8 +3487,6 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 		rx1619_write(chip, PRIVATE_FAST_CHG_CMD, REG_RX_SENT_CMD);    //0x88 fast charge req
 		rx1619_write(chip, AP_SENT_DATA_OK, REG_AP_RX_COMM);
 */
-		dev_info(chip->dev, "[rx1619] [%s] usb_type=0x%x\n", __func__,
-			 usb_type);
 
 		if (chip->is_car_tx && (usb_type >= ADAPTER_XIAOMI_QC3)) {
 			usb_type = ADAPTER_ZIMI_CAR_POWER;
@@ -3450,7 +3500,8 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 
 		if (chip->is_voice_box_tx)
 			usb_type = ADAPTER_VOICE_BOX;
-
+		dev_info(chip->dev, "[rx1619] [%s] usb_type=0x%x\n", __func__,
+			 usb_type);
 		g_USB_TYPE = usb_type;
 		switch (g_USB_TYPE) {
 		case ADAPTER_QC2:
@@ -3476,10 +3527,10 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 		case ADAPTER_XIAOMI_PD:
 		case ADAPTER_ZIMI_CAR_POWER:
 		case ADAPTER_XIAOMI_PD_40W:
-		case ADAPTER_VOICE_BOX:
-		case ADAPTER_XIAOMI_PD_45W:
+		case ADAPTER_XIAOMI_PD_50W:
 		case ADAPTER_XIAOMI_PD_60W:
 		case ADAPTER_XIAOMI_PD_100W:
+		case ADAPTER_VOICE_BOX:
 			chip->target_vol = ADAPTER_EPP_MI_VOL;
 			break;
 		default:
@@ -3629,10 +3680,14 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 				   g_uuid_data[0] == 0x9) {
 				chip->is_voice_box_tx = 1;
 				chip->is_ble_tx = 1;
-			} else if (g_uuid_data[3] == 0x06 &&
-				   g_uuid_data[1] == 0x1 &&
-				   g_uuid_data[2] == 0x5 &&
-				   g_uuid_data[0] == 0x9) {
+			} else if ((g_uuid_data[3] == 0x06 &&
+				    g_uuid_data[1] == 0x1 &&
+				    g_uuid_data[2] == 0x5 &&
+				    g_uuid_data[0] == 0x9) ||
+				   (g_uuid_data[3] == 0x08 &&
+				    g_uuid_data[1] == 0x9 &&
+				    g_uuid_data[2] == 0x9 &&
+				    g_uuid_data[0] == 0xc)) {
 				chip->is_pan_tx = 1;
 			} else if (g_uuid_data[3] == 0x01 &&
 				   g_uuid_data[1] == 0x1 &&
@@ -3654,44 +3709,96 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 			 err_cmd);
 		if (!chip->epp &&
 		    ((err_cmd == ID_CMD) || (err_cmd == AUTH_CMD) ||
-		     (err_cmd == UUID_CMD) ||
+		     (err_cmd == UUID_CMD) || (err_cmd == COMM_CMD) ||
 		     (err_cmd == PRIVATE_USB_TYPE_CMD))) {
+			if (err_cmd == ID_CMD && (retry_id < 3)) {
+				//send device idauth
+				retry_id++;
+				rx1619_retry_id_auth(chip);
+				dev_info(chip->dev,
+					 "[rx1619] id auth failed retry %d\n",
+					 retry_id);
+				break;
+			} else if (err_cmd == AUTH_CMD && retry < 3) {
+				//send device auth
+				rx1619_send_device_auth(chip);
+				retry++;
+				dev_info(chip->dev,
+					 "[rx1619] dev auth failed retry %d\n",
+					 retry);
+				break;
+			} else {
+				retry = 0;
+				retry_id = 0;
+			}
+			g_USB_TYPE = ADAPTER_AUTH_FAILED;
+			if (chip->wireless_psy)
+				power_supply_changed(chip->wireless_psy);
+			dev_info(
+				chip->dev,
+				"[rx1619]auth failed tx charger type set 0x%x\n",
+				g_USB_TYPE);
 			alarm_cancel(&chip->cmd_timeout_alarm);
-			for (i = 0; i < 7; i++) {
-				uA = (100000 + 100000 * i);
+			if (chip->epp) {
+				chip->target_vol = ADAPTER_EPP_QC3_VOL;
+				if (chip->epp_max_power < 10000) {
+					uA = ((chip->epp_max_power - 1000) /
+					      11) *
+					     1000;
+					if (chip->op_mode ==
+					    LN8282_OPMODE_SWITCHING)
+						uA = uA * 2;
+				} else {
+					if (chip->op_mode ==
+					    LN8282_OPMODE_SWITCHING)
+						uA = USB_20W_PLUS_CURRENT_UA;
+					else
+						uA = USB_20W_PLUS_CURRENT_UA /
+						     2;
+				}
 				rx1619_set_pmi_icl(chip, uA);
-				msleep(400);
-				vol = rx1619_get_rx_vout(chip);
-				if (vol < 5200) {
+				rx1619_set_vout(chip, chip->target_vol);
+			} else {
+				for (i = 0; i < 7; i++) {
+					uA = (100000 + 100000 * i);
+					rx1619_set_pmi_icl(chip, uA);
 					msleep(400);
 					vol = rx1619_get_rx_vout(chip);
-					if (vol < 5200 && uA > 200000) {
-						uA = (uA - 100000);
-						rx1619_set_pmi_icl(chip, uA);
-						rx1619_set_vout(chip, 6000);
-						break;
+					if (vol < 5200) {
+						msleep(400);
+						vol = rx1619_get_rx_vout(chip);
+						if (vol < 5200 && uA > 200000) {
+							uA = (uA - 100000);
+							rx1619_set_pmi_icl(chip,
+									   uA);
+							rx1619_set_vout(chip,
+									6000);
+							break;
+						}
 					}
 				}
-			}
 
-			if (i >= 7) {
-				/*do{
-				   msleep(400);
-				   vol = rx1619_get_rx_vout(chip);
-				   if (vol < 6300){
-				   uA = 500000;
-				   rx1619_set_pmi_icl(chip, uA);
-				   break;
-				   }
-				   }while(cnt++<3);
-				   if (cnt == 3)
-				   rx1619_set_pmi_icl(chip, 750000);
-				 */
-				rx1619_set_pmi_icl(chip, 750000);
+				if (i >= 7) {
+					/*do{
+						msleep(400);
+						vol = rx1619_get_rx_vout(chip);
+						if (vol < 6300){
+							uA = 500000;
+						rx1619_set_pmi_icl(chip, uA);
+						break;
+					}
+				}while(cnt++<3);
+				if (cnt == 3)
+					rx1619_set_pmi_icl(chip, 750000);
+			*/
+					rx1619_set_pmi_icl(chip, 750000);
+				}
+				dev_info(chip->dev, "[%s] BPP--750mA \n",
+					 __func__);
+				chip->target_curr = DC_BPP_AUTH_FAIL_CURRENT;
 			}
-			dev_info(chip->dev, "[%s] BPP--750mA \n", __func__);
-			chip->target_curr = DC_BPP_AUTH_FAIL_CURRENT;
 		}
+
 		break;
 
 	case 0x1f: //for product test
@@ -3762,17 +3869,6 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 				chip->dev,
 				"[rx1619] [%s] product test--0x25--g_USB_TYPE=0x%x \n",
 				__func__, g_USB_TYPE);
-		} else if (tx_req == 0x30) {
-			//respond
-			rx1619_write(chip, 0x8D, REG_RX_SENT_CMD);
-			rx1619_write(chip, 0x18, REG_RX_SENT_DATA1);
-			rx1619_write(chip, 0x30, REG_RX_SENT_DATA2);
-			dev_info(
-				chip->dev,
-				"[ factory reverse test ] reverse charging test : receive request\n");
-
-			//start to check power good
-			chip->wait_for_reverse_test = true;
 		} else
 			dev_err(chip->dev,
 				"[rx1619] [%s] product test--other cmd \n",
@@ -3818,7 +3914,7 @@ static irqreturn_t rx1619_power_good_handler(int irq, void *dev_id)
 
 	return IRQ_HANDLED;
 }
-#define POWER_GOOD_GPIO 1158
+
 static int rx1619_parse_dt(struct rx1619_chg *chip)
 {
 	struct device_node *node = chip->dev->of_node;
@@ -3841,9 +3937,6 @@ static int rx1619_parse_dt(struct rx1619_chg *chip)
 		return -EINVAL;
 
 	chip->irq_gpio = of_get_named_gpio(node, "rx,irq_gpio", 0);
-	dev_info(chip->dev, "[%s]: rx1619_irq_gpio is %d\n", __func__,
-		 chip->irq_gpio);
-
 	if (!gpio_is_valid(chip->irq_gpio)) {
 		dev_err(chip->dev, "[rx1619] [%s] fail_irq_gpio %d\n", __func__,
 			chip->irq_gpio);
@@ -3856,20 +3949,9 @@ static int rx1619_parse_dt(struct rx1619_chg *chip)
 			__func__, chip->power_good_gpio);
 		return -EINVAL;
 	}
-	if (need_unconfig_pg)
-		chip->power_good_gpio = POWER_GOOD_GPIO;
-
-	chip->reverse_boost_enable_gpio =
-		of_get_named_gpio(node, "rx,reverse-booset-enable", 0);
-	if ((!gpio_is_valid(chip->reverse_boost_enable_gpio))) {
-		dev_err(chip->dev, "get reverse_boost_enable_gpio fault\n");
-		return -EINVAL;
-	}
 
 	chip->wireless_by_usbin =
 		of_property_read_bool(node, "mi,wireless-by-usbin");
-
-	chip->is_urd_device = of_property_read_bool(node, "mi,urd-device");
 
 	return 0;
 }
@@ -3906,31 +3988,29 @@ static int rx1619_gpio_init(struct rx1619_chg *chip)
 		return ret;
 	}
 
+	if (gpio_is_valid(chip->irq_gpio)) {
+		chip->client->irq = gpio_to_irq(chip->irq_gpio);
+		if (chip->client->irq < 0) {
+			dev_err(chip->dev, "[rx1619] [%s] gpio_to_irq Fail! \n",
+				__func__);
+			goto fail_irq_gpio;
+		}
+	} else {
+		dev_err(chip->dev, "%s: irq gpio not provided\n", __func__);
+		goto fail_irq_gpio;
+	}
+
 	if (gpio_is_valid(chip->power_good_gpio)) {
 		chip->power_good_irq = gpio_to_irq(chip->power_good_gpio);
 		if (chip->power_good_irq < 0) {
-			dev_err(chip->dev,
-				"[rx1619] [%s] power good irq Fail! %d\n",
-				__func__, chip->power_good_irq);
+			dev_err(chip->dev, "[rx1619] [%s] gpio_to_irq Fail! \n",
+				__func__);
 			goto fail_power_good_gpio;
 		}
 	} else {
 		dev_err(chip->dev, "%s: power good gpio not provided\n",
 			__func__);
 		goto fail_power_good_gpio;
-	}
-
-	if (gpio_is_valid(chip->irq_gpio)) {
-		chip->client->irq = gpio_to_irq(chip->irq_gpio);
-		if (chip->client->irq < 0) {
-			dev_err(chip->dev,
-				"[rx1619] [%s] gpio_to_irq Fail! %d \n",
-				__func__, chip->irq_gpio);
-			goto fail_irq_gpio;
-		}
-	} else {
-		dev_err(chip->dev, "%s: irq gpio not provided\n", __func__);
-		goto fail_irq_gpio;
 	}
 
 	return ret;
@@ -3976,34 +4056,6 @@ static int rx1619_set_reverse_gpio_state(struct rx1619_chg *chip, int enable)
 	}
 	return 0;
 }
-
-static int rx_set_reverse_boost_enable_gpio(struct rx1619_chg *chip, int enable)
-{
-	int ret;
-	if (gpio_is_valid(chip->reverse_boost_enable_gpio)) {
-		ret = gpio_request(chip->reverse_boost_enable_gpio,
-				   "reverse-boost-enable-gpio");
-		if (ret) {
-			dev_err(chip->dev,
-				"%s: unable to reverse_boost_enable_gpio [%d]\n",
-				__func__, chip->reverse_boost_enable_gpio);
-		}
-
-		ret = gpio_direction_output(chip->reverse_boost_enable_gpio,
-					    !!enable);
-		if (ret) {
-			dev_err(chip->dev,
-				"%s: cannot set direction for reverse_boost_enable_gpio  gpio [%d]\n",
-				__func__, chip->reverse_boost_enable_gpio);
-		}
-		gpio_free(chip->reverse_boost_enable_gpio);
-	} else
-		dev_err(chip->dev,
-			"%s: unable to set reverse_boost_enable_gpio\n");
-
-	return ret;
-}
-
 static int rx_set_reverse_gpio(struct rx1619_chg *chip, int enable)
 {
 	int ret;
@@ -4011,24 +4063,26 @@ static int rx_set_reverse_gpio(struct rx1619_chg *chip, int enable)
 		0,
 	};
 
-	if (!chip->wireless_psy)
-		chip->wireless_psy = power_supply_get_by_name("wireless");
-
+	chip->wireless_psy = power_supply_get_by_name("wireless");
 	if (!chip->wireless_psy) {
-		dev_err(chip->dev, "no wireless_psy,return\n");
+		dev_err(chip->dev, "[idt] no wireless_psy,return\n");
 		return -EINVAL;
 	}
 
-	val.intval = !!enable;
+	if (enable) {
+		val.intval = 1;
+		power_supply_set_property(chip->wireless_psy,
+					  POWER_SUPPLY_PROP_SW_DISABLE_DC_EN,
+					  &val);
+	} else {
+		val.intval = 0;
+		power_supply_set_property(
+			chip->wireless_psy,
+			POWER_SUPPLY_PROP_WIRELESS_POWER_GOOD_EN, &val);
+	}
+
 	if (gpio_is_valid(chip->tx_on_gpio)) {
-		if (enable) {
-			rx1619_set_reverse_gpio_state(chip, enable);
-			power_supply_set_property(
-				chip->wireless_psy,
-				POWER_SUPPLY_PROP_SW_DISABLE_DC_EN, &val);
-			rx_set_reverse_boost_enable_gpio(chip, enable);
-			msleep(100);
-		}
+		rx1619_set_reverse_gpio_state(chip, enable);
 		ret = gpio_request(chip->tx_on_gpio, "tx-on-gpio");
 		if (ret) {
 			dev_err(chip->dev,
@@ -4045,15 +4099,6 @@ static int rx_set_reverse_gpio(struct rx1619_chg *chip, int enable)
 		ret = gpio_get_value(chip->tx_on_gpio);
 		dev_info(chip->dev, "txon gpio: %d\n", ret);
 		gpio_free(chip->tx_on_gpio);
-		if (!enable) {
-			msleep(100);
-			rx_set_reverse_boost_enable_gpio(chip, enable);
-			rx1619_set_reverse_gpio_state(chip, enable);
-			power_supply_set_property(
-				chip->wireless_psy,
-				POWER_SUPPLY_PROP_SW_DISABLE_DC_EN, &val);
-		}
-
 	} else
 		dev_err(chip->dev, "%s: unable to set tx_on gpio_130\n");
 
@@ -4083,6 +4128,12 @@ static int rx_get_reverse_chg_mode(struct rx1619_chg *chip)
 
 static int rx_set_reverse_chg_mode(struct rx1619_chg *chip, int enable)
 {
+	union power_supply_propval cp_val = {
+		0,
+	};
+	union power_supply_propval val = {
+		0,
+	};
 	union power_supply_propval wk_val = {
 		0,
 	};
@@ -4090,16 +4141,47 @@ static int rx_set_reverse_chg_mode(struct rx1619_chg *chip, int enable)
 
 	chip->wireless_psy = power_supply_get_by_name("wireless");
 	if (!chip->wireless_psy) {
-		dev_err(chip->dev, "no wireless_psy,return\n");
+		dev_err(chip->dev, "[idt] no wireless_psy,return\n");
 		return -EINVAL;
 	}
 
+	if (enable) {
+		val.intval = 1;
+		power_supply_set_property(chip->wireless_psy,
+					  POWER_SUPPLY_PROP_SW_DISABLE_DC_EN,
+					  &val);
+	} else {
+		val.intval = 0;
+		power_supply_set_property(
+			chip->wireless_psy,
+			POWER_SUPPLY_PROP_WIRELESS_POWER_GOOD_EN, &val);
+	}
+
 	if (gpio_is_valid(chip->tx_on_gpio)) {
-		rx_set_reverse_gpio(chip, enable);
+		rx1619_set_reverse_gpio_state(chip, enable);
+		ret = gpio_request(chip->tx_on_gpio, "tx-on-gpio");
+		if (ret) {
+			dev_err(chip->dev,
+				"%s: unable to request tx_on gpio 130\n",
+				__func__);
+		}
+		ret = gpio_direction_output(chip->tx_on_gpio, enable);
+		if (ret) {
+			dev_err(chip->dev,
+				"%s: cannot set direction for tx_on gpio 130\n",
+				__func__);
+		}
+		gpio_free(chip->tx_on_gpio);
 		power_supply_changed(chip->wireless_psy);
+		dev_info(chip->dev,
+			 "reverse_charge, set ln8282 powerpath and opmode\n");
 		msleep(100);
 		if (enable) {
 			if (chip->wireless_psy) {
+				cp_val.intval = 3;
+				power_supply_set_property(
+					chip->wireless_psy,
+					POWER_SUPPLY_PROP_DIV_2_MODE, &cp_val);
 				wk_val.intval = 1;
 				power_supply_set_property(
 					chip->wireless_psy,
@@ -4107,12 +4189,24 @@ static int rx_set_reverse_chg_mode(struct rx1619_chg *chip, int enable)
 					&wk_val);
 			}
 			msleep(100);
+			/* set reverse mode according to hw country */
+			if (chip->hw_country == CountryGlobal ||
+			    chip->is_otg_insert) {
+				rx1619_set_reverse_parameter(
+					chip, REVERSE_COUNTRY_INTERNATIONAL,
+					REVERSE_CURRENT_500MA);
+			} else {
+				rx1619_set_reverse_parameter(
+					chip, REVERSE_COUNTRY_DOMESTIC,
+					REVERSE_CURRENT_1000MA);
+			}
 			/* set reverse fod */
 			rx1619_set_reverse_fod(chip, 0, 0);
 			rx1619_start_tx_function(chip);
 			alarm_start_relative(
 				&chip->reverse_dping_alarm,
 				ms_to_ktime(REVERSE_DPING_CHECK_DELAY_MS));
+			//schedule_delayed_work(&chip->reverse_dping_state_work, 10 * HZ);
 		} else {
 			dev_info(chip->dev,
 				 "disable reverse charging for wireless\n");
@@ -4170,24 +4264,6 @@ static enum alarmtimer_restart cmd_timeout_alarm_cb(struct alarm *alarm,
 
 	/* Atomic context, cannot use voter */
 	schedule_delayed_work(&chip->cmd_timeout_work, 0);
-
-	return ALARMTIMER_NORESTART;
-}
-
-static enum alarmtimer_restart reverse_test_ready_alarm_cb(struct alarm *alarm,
-							   ktime_t now)
-{
-	struct rx1619_chg *chip = container_of(alarm, struct rx1619_chg,
-					       reverse_test_ready_alarm);
-
-	dev_info(
-		chip->dev,
-		"[ factory reverse test ] reverse_rest_ready_alarm Triggered\n");
-
-	/* Atomic context, cannot use voter */
-	pm_stay_awake(chip->dev);
-	schedule_delayed_work(&chip->reverse_dping_state_work, 0);
-	chip->wait_for_reverse_test = false;
 
 	return ALARMTIMER_NORESTART;
 }
@@ -4251,17 +4327,28 @@ static void rx1619_set_present(struct rx1619_chg *chip, int enable)
 		chip->disable_bq = false;
 		cancel_delayed_work_sync(&chip->wireless_int_work);
 		cancel_delayed_work(&chip->chg_monitor_work);
+		chip->ln_psy = power_supply_get_by_name("lionsemi");
+		if (chip->ln_psy)
+			power_supply_set_property(
+				chip->ln_psy,
+				POWER_SUPPLY_PROP_RESET_DIV_2_MODE, &val);
+
 		/* clear TX address */
 		memset(chip->mac_addr, 0x0, sizeof(chip->mac_addr));
 		rx1619_sent_tx_mac(chip);
 
 		/* enable aicl if disabled by wireless earlier */
 		rx1619_enable_aicl(chip, true);
+		if (chip->fcc_votable) {
+			vote(chip->fcc_votable, VOICE_LIMIT_FCC_VOTER, false,
+			     0);
+			vote(chip->fcc_votable, VOICE_LIMIT_FCC_1A_VOTER, false,
+			     0);
+		}
 		if (chip->usb_psy)
 			power_supply_changed(chip->usb_psy);
 	}
 }
-
 /* set otg state while reverse status */
 #define OTG_REG_ADDR 0x00
 #define OTG_PLUGIN_CMD 0x12
@@ -4588,7 +4675,6 @@ static ssize_t attr_firmware_bin_store(struct device *dev,
 out:
 	return count;
 }
-
 static DEVICE_ATTR(chip_vrect, S_IRUGO, chip_vrect_show, NULL);
 static DEVICE_ATTR(chip_vout_calibration, S_IWUSR, NULL,
 		   chip_vout_calibration_store);
@@ -4660,6 +4746,18 @@ static int rx1619_wireless_set_property(struct power_supply *psy,
 	int data;
 
 	switch (prop) {
+		/*
+		   case POWER_SUPPLY_PROP_PRESENT:
+		   break;
+		   case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+		   rx1619_chip_enable(chip, val->intval);
+		   break;
+		   case POWER_SUPPLY_PROP_VOUT_SET:
+		   ret = rx1619_set_vout(chip, val->intval);
+		   if(ret < 0)
+		   return ret;
+		   break;
+		 */
 	case POWER_SUPPLY_PROP_PRESENT:
 		rx1619_set_present(chip, val->intval);
 		break;
@@ -4670,14 +4768,6 @@ static int rx1619_wireless_set_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_REGULATION:
 		data = val->intval / 1000;
-
-		if (chip->is_urd_device) {
-			if (data > 20000)
-				data = 20000;
-			ret = rx1619_set_vout(chip, data);
-			break;
-		}
-
 		if (data < ADAPTER_VOUT_LIMIT_VOL)
 			data = ADAPTER_VOUT_LIMIT_VOL;
 		else if (data > 10000)
@@ -4725,6 +4815,29 @@ static int rx1619_wireless_get_property(struct power_supply *psy,
 	struct rx1619_chg *chip = power_supply_get_drvdata(psy);
 
 	switch (prop) {
+		/*
+		   case POWER_SUPPLY_PROP_ONLINE:
+		   val->intval = chip->online;
+		   break;
+		   case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+		   val->intval = chip->chip_enable;
+		   break;
+		   case POWER_SUPPLY_PROP_RX_CHIP_ID:
+		   val->intval = rx1619_get_rx_chip_id(chip);
+		   break;
+		   case POWER_SUPPLY_PROP_RX_VRECT:
+		   val->intval = rx1619_get_rx_vrect(chip);
+		   break;
+		   case POWER_SUPPLY_PROP_RX_IOUT:
+		   val->intval = rx1619_get_rx_iout(chip);
+		   break;
+		   case POWER_SUPPLY_PROP_RX_VOUT:
+		   val->intval = rx1619_get_rx_vout(chip);
+		   break;
+		   case POWER_SUPPLY_PROP_VOUT_SET:
+		   val->intval = 0;
+		   break;
+		 */
 	case POWER_SUPPLY_PROP_WIRELESS_VERSION:
 		val->intval = chip->epp;
 		break;
@@ -4743,11 +4856,6 @@ static int rx1619_wireless_get_property(struct power_supply *psy,
 			break;
 		}
 		tmp = rx1619_get_rx_vout(chip);
-
-		if (chip->is_urd_device) {
-			val->intval = tmp;
-			break;
-		}
 		if (chip->op_mode == LN8282_OPMODE_SWITCHING)
 			val->intval = tmp / 2;
 		else
@@ -4760,10 +4868,7 @@ static int rx1619_wireless_get_property(struct power_supply *psy,
 		val->intval = rx1619_get_rx_iout(chip);
 		break;
 	case POWER_SUPPLY_PROP_PIN_ENABLED:
-		if (chip->enable_gpio)
-			val->intval = !gpio_get_value(chip->enable_gpio);
-		else
-			val->intval = 0;
+		val->intval = !gpio_get_value(chip->enable_gpio);
 		break;
 	case POWER_SUPPLY_PROP_REVERSE_CHG_MODE:
 		val->intval = rx_get_reverse_chg_mode(chip);
@@ -4833,6 +4938,29 @@ static int rx1619_probe(struct i2c_client *client,
 	//int drv_load = 0;
 
 	struct power_supply_config wip_psy_cfg = {};
+	/*
+	drv_load = get_board_version();
+	if (!drv_load)
+		return 0;
+*/
+
+	/*
+	   int hw_id;
+
+	   struct power_supply *batt_psy;
+
+	   batt_psy = power_supply_get_by_name("battery");
+	   if (!batt_psy) {
+	   dev_err(&client->dev, "Battery supply not found; defer probe\n");
+	   return -EPROBE_DEFER;
+	   }
+
+	   hw_id = get_hw_country_version();
+	   dev_info(&client->dev, "[rx1619] %s: hw_id is %d\n", __func__, hw_id);
+	   if (hw_id)  //hw_id=1 is idt
+	   return 0;
+	 */
+
 	chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
 	if (!chip) {
 		dev_err(&client->dev,
@@ -4849,6 +4977,8 @@ static int rx1619_probe(struct i2c_client *client,
 	chip->client = client;
 	chip->dev = &client->dev;
 
+	//chip->batt_psy = batt_psy;
+	//chip->online = 0;
 	chip->chip_enable = false;
 	chip->ss = 2;
 	chip->fw_update = false;
@@ -4890,6 +5020,7 @@ static int rx1619_probe(struct i2c_client *client,
 	chip->wip_psy_d.properties = rx1619_wireless_properties;
 	chip->wip_psy_d.num_properties = ARRAY_SIZE(rx1619_wireless_properties);
 	chip->wip_psy_d.property_is_writeable = rx1619_prop_is_writeable,
+
 	wip_psy_cfg.drv_data = chip;
 
 	chip->wip_psy = devm_power_supply_register(chip->dev, &chip->wip_psy_d,
@@ -4943,14 +5074,6 @@ static int rx1619_probe(struct i2c_client *client,
 
 	//rx1619_dump_reg();
 	g_chip = chip;
-	if (alarmtimer_get_rtcdev()) {
-		alarm_init(&chip->reverse_test_ready_alarm, ALARM_BOOTTIME,
-			   reverse_test_ready_alarm_cb);
-	} else {
-		dev_err(chip->dev,
-			"Failed to initialize reverse_test_ready_alarm alarm\n");
-		return -ENODEV;
-	}
 
 	if (alarmtimer_get_rtcdev()) {
 		alarm_init(&chip->reverse_dping_alarm, ALARM_BOOTTIME,
@@ -4978,6 +5101,7 @@ static int rx1619_probe(struct i2c_client *client,
 	}
 	chip->hw_country = get_hw_country_version();
 	dev_info(&client->dev, "hw_country: %d\n", chip->hw_country);
+
 	dev_err(chip->dev, "[rx1619] [%s] success! \n", __func__);
 	get_cmdline(chip);
 
@@ -4988,12 +5112,11 @@ static int rx1619_probe(struct i2c_client *client,
 	} else {
 		schedule_delayed_work(&chip->chg_detect_work, 3 * HZ);
 	}
-
 	if (!g_rx1619_first_flag)
 		schedule_delayed_work(&chip->rx_first_boot,
-				      msecs_to_jiffies(30000));
-
+				      msecs_to_jiffies(45000));
 	return 0;
+
 error_sysfs:
 	sysfs_remove_group(rx1619_kobj, &rx1619_sysfs_group_attrs);
 	dev_err(chip->dev, "[rx1619] [%s] rx1619 probe error_sysfs! \n",
@@ -5023,12 +5146,10 @@ static int rx1619_remove(struct i2c_client *client)
 
 	return 0;
 }
-
 static const struct i2c_device_id rx1619_id[] = {
 	{ rx1619_DRIVER_NAME, 0 },
 	{},
 };
-
 MODULE_DEVICE_TABLE(i2c, rx1619_id);
 
 static struct of_device_id rx1619_match_table[] = {
@@ -5040,9 +5161,9 @@ static struct of_device_id rx1619_match_table[] = {
 
 static struct i2c_driver rx1619_driver = {
 	.driver = {
-		   .name = rx1619_DRIVER_NAME,
-		   .of_match_table = rx1619_match_table,
-		   },
+		.name = rx1619_DRIVER_NAME,
+		.of_match_table = rx1619_match_table,
+	},
 	.probe = rx1619_probe,
 	.remove = rx1619_remove,
 	.shutdown = rx1619_shutdown,
@@ -5052,10 +5173,15 @@ static struct i2c_driver rx1619_driver = {
 static int __init rx1619_init(void)
 {
 	int ret;
+#ifdef CONFIG_RX1619_REMOVE
+	return 0;
+#endif
 
+#ifndef CONFIG_RX_ON_URD
 	printk("is_nvt_rx flag is:%d\n", is_nvt_rx);
 	if (!is_nvt_rx)
 		return 0;
+#endif
 
 	ret = i2c_add_driver(&rx1619_driver);
 	if (ret)
@@ -5068,26 +5194,19 @@ static void __exit rx1619_exit(void)
 {
 	i2c_del_driver(&rx1619_driver);
 }
-#define BOARD_P01 "P0.1"
-#define BOARD_P1 "P1"
-#define BOARD_P11 "P1.1"
-static int __init early_parse_hw_level(char *p)
+
+static int __init early_parse_oled_pmic_id(char *p)
 {
-	/* just p01 is nuvlota */
 	if (p) {
-		if (!strcmp(p, "P0.1") && strlen(p) == strlen("P0.1"))
+		if (!strcmp(p, "0B") || !strcmp(p, "0C"))
 			is_nvt_rx = true;
-		if ((!strcmp(p, BOARD_P01) && strlen(p) == strlen(BOARD_P01)) ||
-		    (!strcmp(p, BOARD_P1) && strlen(p) == strlen(BOARD_P1)) ||
-		    (!strcmp(p, BOARD_P11) && strlen(p) == strlen(BOARD_P11)))
-			need_unconfig_pg = true;
 	}
+
 	return 0;
 }
+early_param("androidboot.oled_pmic_id", early_parse_oled_pmic_id);
 
-early_param("androidboot.hwlevel", early_parse_hw_level);
-
-module_init(rx1619_init);
+late_initcall(rx1619_init);
 module_exit(rx1619_exit);
 
 MODULE_AUTHOR("colin");
