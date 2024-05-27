@@ -38,7 +38,7 @@
 #include <linux/types.h>
 //#include <linux/power/ln8000_charger.h>
 #include "ln8000_charger.h"
-#include "cp_qc30.h"
+#include "../ti/cp_qc30.h"
 
 #define LN8000_DUAL_CONFIG
 #define LN8000_I2C_RETRY 5

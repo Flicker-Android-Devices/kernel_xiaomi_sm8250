@@ -40,8 +40,8 @@
 #define LN8282_HW_REV_Bx //HW rev.
 
 // DEBUG options (uncomment)
-#define LN8282_DEBUG_OTP_CTRL // **WARNING** this is an experimental feature
-	//             NEVER use in production releases
+#define LN8282_DEBUG_OTP_CTRL // **WARNING** this is an experimental feature   \
+//             NEVER use in production releases
 
 /*********************************************************************************
  * DESIGN GUIDE:
