@@ -13,7 +13,7 @@
 #include <linux/types.h>
 #include <linux/device.h>
 #include <linux/workqueue.h>
-#include "idtp9415_fw.h"
+#include "idtp9415_cas_fw.h"
 #define IDT_DRIVER_NAME "idtp9415"
 #define IDT_I2C_ADDR 0x61
 
