@@ -9,7 +9,7 @@
 #include <linux/sysfs.h>
 #include <asm/unaligned.h>
 /*add for sdm845 request*/
-#include <idtp9415.h>
+#include <idtp9415_cas.h>
 #include <linux/regmap.h>
 #include <linux/spinlock.h>
 #include <linux/of_gpio.h>
