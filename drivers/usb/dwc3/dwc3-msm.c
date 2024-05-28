@@ -46,7 +46,7 @@
 #include "dbm.h"
 #include "debug.h"
 #include "xhci.h"
-#ifdef CONFIG_BOARD_DAGU
+#ifdef CONFIG_MACH_XIAOMI_DAGU
 #include "../pd/ps5169.h"
 #endif
 
@@ -519,9 +519,12 @@ static inline bool dwc3_msm_is_superspeed(struct dwc3_msm *mdwc)
 	if (mdwc->in_host_mode) {
 		ret = dwc3_msm_is_host_superspeed(mdwc);
 		dev_info(mdwc->dev, "%s: host SS:%d.\n", __func__,ret);
-	} else {
+	} else if (mdwc->in_device_mode) {
 		ret =  dwc3_msm_is_dev_superspeed(mdwc);
 		dev_info(mdwc->dev, "%s: device SS:%d.\n", __func__, ret);
+	} else {
+		dev_info(mdwc->dev, "%s: Null Insert.\n", __func__);
+		return 0;
 	}
 
 	return ret;
@@ -4397,7 +4400,7 @@ static void msm_dwc3_perf_vote_work(struct work_struct *w)
 			msecs_to_jiffies(1000 * PM_QOS_SAMPLE_SEC));
 }
 
-#ifdef CONFIG_BOARD_DAGU
+#ifdef CONFIG_MACH_XIAOMI_DAGU
 extern bool has_dp_flag;
 #endif
 
@@ -4518,7 +4521,7 @@ static int dwc3_otg_start_host(struct dwc3_msm *mdwc, int on)
 		schedule_delayed_work(&mdwc->perf_vote_work,
 				msecs_to_jiffies(1000 * PM_QOS_SAMPLE_SEC));
 
-#ifdef CONFIG_BOARD_DAGU
+#ifdef CONFIG_MACH_XIAOMI_DAGU
 		if (!has_dp_flag)
 			ps5169_cfg_usb();
 #endif
@@ -4643,7 +4646,7 @@ static int dwc3_otg_start_peripheral(struct dwc3_msm *mdwc, int on)
 		schedule_delayed_work(&mdwc->perf_vote_work,
 				msecs_to_jiffies(1000 * PM_QOS_SAMPLE_SEC));
 
-#ifdef CONFIG_BOARD_DAGU
+#ifdef CONFIG_MACH_XIAOMI_DAGU
 		if (!has_dp_flag)
 			ps5169_cfg_usb();
 #endif
