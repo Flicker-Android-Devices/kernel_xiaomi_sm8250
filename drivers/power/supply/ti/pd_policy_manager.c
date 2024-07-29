@@ -387,10 +387,14 @@ static bool pd_get_bms_digest_verified(struct usbpd_pm *pdpm)
 
 	pr_err("pval.intval: %d\n", pval.intval);
 
+#if defined(CONFIG_MACH_XIAOMI_LMI)
+	return true;
+#else
 	if (pval.intval == 1)
 		return true;
 	else
 		return false;
+#endif
 }
 
 /* get bq27z561 chip ok*/
