@@ -297,16 +297,22 @@ And public attribution of xiaomi platforms(like elish and so and)
 			novatek,display-maker = <0x42>;
 			novatek,fw-name = "novatek_nt36523_k81a_fw01.bin";
 			novatek,mp-name = "novatek_nt36523_k81a_mp01.bin";
+			novatek,fw-pen-name = "novatek_nt36523_k81a_fw01_pen.bin";
+			novatek,mp-pen-name = "novatek_nt36523_k81a_mp01_pen.bin";
 		};
 		novatek,cfg_1 {
 			novatek,display-maker = <0x08>;
 			novatek,fw-name = "novatek_nt36523_k81a_fw02.bin";
 			novatek,mp-name = "novatek_nt36523_k81a_mp02.bin";
+			novatek,fw-pen-name = "novatek_nt36523_k81a_fw02_pen.bin";
+			novatek,mp-pen-name = "novatek_nt36523_k81a_mp02_pen.bin";
 		};
 		novatek,cfg_2 {
 			novatek,display-maker = <0x35>;
 			novatek,fw-name = "novatek_nt36523_k81a_fw02.bin";
 			novatek,mp-name = "novatek_nt36523_k81a_mp02.bin";
+			novatek,fw-pen-name = "novatek_nt36523_k81a_fw02_pen.bin";
+			novatek,mp-pen-name = "novatek_nt36523_k81a_mp02_pen.bin";
 		};
 	};
 };
