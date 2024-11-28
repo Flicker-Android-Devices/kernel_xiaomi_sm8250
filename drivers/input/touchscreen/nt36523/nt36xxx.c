@@ -1714,7 +1714,7 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 	uint32_t pen_battery = 0;
 
 	static struct task_struct *touch_task = NULL;
-	struct sched_param par = { .sched_priority = MAX_RT_PRIO / 2 };
+	struct sched_param par = { .sched_priority = MAX_RT_PRIO - 1 };
 
 	if (touch_task == NULL) {
 		touch_task = current;
