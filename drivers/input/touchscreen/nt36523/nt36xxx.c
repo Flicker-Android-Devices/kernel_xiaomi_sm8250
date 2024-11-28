@@ -148,6 +148,20 @@ static struct tp_common_ops double_tap_ops = {
 };
 #endif
 
+static void nvt_switch_pen_firmware(bool on)
+{
+	if (on) {
+		ts->fw_name = ts->config_array[ts->panel_index].nvt_fw_pen_name;
+		ts->mp_name = ts->config_array[ts->panel_index].nvt_mp_pen_name;
+	} else {
+		ts->fw_name = ts->config_array[ts->panel_index].nvt_fw_name;
+		ts->mp_name = ts->config_array[ts->panel_index].nvt_mp_name;
+	}
+
+	pr_info("[mi-pen]: switch_pen_firmware fw-name: %s\n", ts->fw_name);
+	pr_info("[mi-pen]: switch_pen_firmware mp-name: %s\n", ts->mp_name);
+}
+
 #ifdef CONFIG_MTK_SPI
 const struct mt_chip_conf spi_ctrdata = {
 	.setuptime = 25,
