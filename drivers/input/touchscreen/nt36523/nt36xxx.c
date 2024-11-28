@@ -1306,6 +1306,22 @@ static int32_t nvt_parse_dt(struct device *dev)
 			NVT_LOG("mp_name: %s", config_info->nvt_mp_name);
 		}
 
+		ret = of_property_read_string(temp, "novatek,fw-pen-name",
+					      &config_info->nvt_fw_pen_name);
+		if (ret && (ret != -EINVAL)) {
+			NVT_LOG("Unable to read fw pen name\n");
+		} else {
+			NVT_LOG("fw_pen_name: %s", config_info->nvt_fw_pen_name);
+		}
+
+		ret = of_property_read_string(temp, "novatek,mp-pen-name",
+					      &config_info->nvt_mp_pen_name);
+		if (ret && (ret != -EINVAL)) {
+			NVT_LOG("Unable to read mp pen name\n");
+		} else {
+			NVT_LOG("mp_pen_name: %s", config_info->nvt_mp_pen_name);
+		}
+
 		config_info++;
 	}
 
