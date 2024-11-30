@@ -148,6 +148,9 @@ static struct tp_common_ops double_tap_ops = {
 };
 #endif
 
+static void release_pen_event(void);
+static int disable_pen_input_device(bool disable);
+
 static void nvt_switch_pen_firmware(bool on)
 {
 	if (on) {
@@ -161,6 +164,35 @@ static void nvt_switch_pen_firmware(bool on)
 	pr_info("[mi-pen]: switch_pen_firmware fw-name: %s\n", ts->fw_name);
 	pr_info("[mi-pen]: switch_pen_firmware mp-name: %s\n", ts->mp_name);
 }
+
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+static ssize_t pen_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return sprintf(buf, "%d\n", ts->pen_input_dev_enable);
+}
+
+static ssize_t pen_store(struct kobject *kobj, struct kobj_attribute *attr,
+			 const char *buf, size_t count)
+{
+	int rc, val;
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc)
+		return -EINVAL;
+
+	ts->pen_input_dev_enable = !!val;
+	disable_pen_input_device(!ts->pen_input_dev_enable);
+	release_pen_event();
+
+	return count;
+}
+
+static struct tp_common_ops pen_ops = {
+	.show = pen_show,
+	.store = pen_store,
+};
+#endif
 
 #ifdef CONFIG_MTK_SPI
 const struct mt_chip_conf spi_ctrdata = {
@@ -2413,35 +2445,6 @@ static void nvt_pen_charge_state_change_work(struct work_struct *work)
 	NVT_LOG("pen charge is %s", ts->pen_is_charge ? "ENABLE" : "DISABLE");
 	disable_pen_input_device(ts->pen_is_charge);
 }
-
-#ifdef CONFIG_TOUCHSCREEN_COMMON
-static ssize_t pen_show(struct kobject *kobj, struct kobj_attribute *attr,
-			char *buf)
-{
-	return sprintf(buf, "%d\n", ts->pen_input_dev_enable);
-}
-
-static ssize_t pen_store(struct kobject *kobj, struct kobj_attribute *attr,
-			 const char *buf, size_t count)
-{
-	int rc, val;
-
-	rc = kstrtoint(buf, 10, &val);
-	if (rc)
-		return -EINVAL;
-
-	ts->pen_input_dev_enable = !!val;
-	disable_pen_input_device(!ts->pen_input_dev_enable);
-	release_pen_event();
-
-	return count;
-}
-
-static struct tp_common_ops pen_ops = {
-	.show = pen_show,
-	.store = pen_store,
-};
-#endif
 
 static void nvt_set_gesture_mode(void)
 {
