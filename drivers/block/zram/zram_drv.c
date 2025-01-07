@@ -1277,6 +1277,7 @@ static bool zram_meta_alloc(struct zram *zram, u64 disksize)
 	zram->mem_pool = zs_create_pool(zram->disk->disk_name);
 	if (!zram->mem_pool) {
 		vfree(zram->table);
+		zram->table = NULL;
 		return false;
 	}
 
@@ -1285,6 +1286,7 @@ static bool zram_meta_alloc(struct zram *zram, u64 disksize)
 
 	if (zram_dedup_init(zram, num_pages)) {
 		vfree(zram->table);
+		zram->table = NULL;
 		zs_destroy_pool(zram->mem_pool);
 		return false;
 	}
