@@ -4430,7 +4430,8 @@ static int wm_halo_apply_calibration(struct snd_soc_dapm_widget *w)
 #if defined(CONFIG_TARGET_PRODUCT_APOLLO) ||                                   \
 	defined(CONFIG_TARGET_PRODUCT_CAS) ||                                  \
 	defined(CONFIG_TARGET_PRODUCT_ALIOTH) ||                               \
-	defined(CONFIG_TARGET_PRODUCT_PSYCHE)
+	defined(CONFIG_TARGET_PRODUCT_PSYCHE) ||                               \
+	defined(CONFIG_TARGET_PRODUCT_THYME)
 			wm_adsp_k_ctl_put(
 				dsp,
 				"RCV DSP1X Protection 400a4 E_FULL_US_BYPASS",
