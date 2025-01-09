@@ -4426,7 +4426,8 @@ static int wm_halo_apply_calibration(struct snd_soc_dapm_widget *w)
 			//for ultrasonic
 #if defined(CONFIG_MACH_XIAOMI_APOLLO) || defined(CONFIG_MACH_XIAOMI_CAS) ||   \
 	defined(CONFIG_MACH_XIAOMI_ALIOTH) ||                                  \
-	defined(CONFIG_MACH_XIAOMI_PSYCHE)
+	defined(CONFIG_MACH_XIAOMI_PSYCHE) ||   \
+	defined(CONFIG_MACH_XIAOMI_THYME)
 			wm_adsp_k_ctl_put(
 				dsp,
 				"RCV DSP1X Protection 400a4 E_FULL_US_BYPASS",
