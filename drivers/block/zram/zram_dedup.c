@@ -73,7 +73,7 @@ static bool zram_dedup_match(struct zram *zram, struct zram_entry *entry,
 	unsigned char *cmem;
 	struct zcomp_strm *zstrm;
 
-	cmem = zs_map_object(zram->mem_pool, entry->handle, ZS_MM_RO);
+	cmem = zpool_map_handle(zram->mem_pool, entry->handle, ZPOOL_MM_WO);
 	if (entry->len == PAGE_SIZE) {
 		match = !memcmp(mem, cmem, PAGE_SIZE);
 	} else {
@@ -82,7 +82,7 @@ static bool zram_dedup_match(struct zram *zram, struct zram_entry *entry,
 			match = !memcmp(mem, zstrm->buffer, PAGE_SIZE);
 		zcomp_stream_put(zram->comp);
 	}
-	zs_unmap_object(zram->mem_pool, entry->handle);
+	zpool_unmap_handle(zram->mem_pool, entry->handle);
 
 	return match;
 }
