@@ -4,11 +4,6 @@ source "techpack/data/Kconfig"
 
 menu "Camera packages"
 
-config TECHPACK_CAMERA_XIAOMI
-    bool "Xiaomi camera"
-    help
-      Xiaomi camera
-
 config TECHPACK_CAMERA_XIAOMI_CAS
     bool "Xiaomi camera CAS"
     help
