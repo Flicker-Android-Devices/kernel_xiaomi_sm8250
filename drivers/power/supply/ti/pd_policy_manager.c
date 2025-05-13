@@ -370,6 +370,9 @@ static bool pd_disable_cp_by_jeita_status(struct usbpd_pm *pdpm)
 /* get bq27z561 fastcharge mode to enable or disabled */
 static bool pd_get_bms_digest_verified(struct usbpd_pm *pdpm)
 {
+#if defined(CONFIG_MACH_XIAOMI_LMI)
+	return true;
+#else
 	union power_supply_propval pval = {
 		0,
 	};
@@ -391,6 +394,7 @@ static bool pd_get_bms_digest_verified(struct usbpd_pm *pdpm)
 		return true;
 	else
 		return false;
+#endif
 }
 
 /* get bq27z561 chip ok*/
