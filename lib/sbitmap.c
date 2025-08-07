@@ -18,6 +18,7 @@
 #include <linux/sched.h>
 #include <linux/random.h>
 #include <linux/sbitmap.h>
+#include <linux/math64.h>
 #include <linux/seq_file.h>
 
 int sbitmap_init_node(struct sbitmap *sb, unsigned int depth, int shift,
@@ -142,6 +143,25 @@ int sbitmap_get(struct sbitmap *sb, unsigned int alloc_hint, bool round_robin)
 }
 EXPORT_SYMBOL_GPL(sbitmap_get);
 
+static unsigned int __map_depth_with_shallow(const struct sbitmap *sb,
+					     unsigned int index,
+					     unsigned long shallow_depth)
+{
+	u64 shallow_word_depth;
+	unsigned int word_depth, remainder;
+
+	word_depth = sb->map[index].depth;
+	if (shallow_depth >= sb->depth)
+		return word_depth;
+
+	shallow_word_depth = (u64)word_depth * shallow_depth;
+	remainder = do_div(shallow_word_depth, sb->depth);
+	if (remainder >= (index + 1) * word_depth)
+		shallow_word_depth++;
+
+	return (unsigned int)shallow_word_depth;
+}
+
 int sbitmap_get_shallow(struct sbitmap *sb, unsigned int alloc_hint,
 			unsigned long shallow_depth)
 {
@@ -151,9 +171,12 @@ int sbitmap_get_shallow(struct sbitmap *sb, unsigned int alloc_hint,
 	index = SB_NR_TO_INDEX(sb, alloc_hint);
 
 	for (i = 0; i < sb->map_nr; i++) {
-		nr = __sbitmap_get_word(&sb->map[index].word,
-					min(sb->map[index].depth, shallow_depth),
-					SB_NR_TO_BIT(sb, alloc_hint), true);
+		unsigned int depth = __map_depth_with_shallow(sb, index,
+							    shallow_depth);
+
+		if (depth)
+			nr = __sbitmap_get_word(&sb->map[index].word, depth,
+						SB_NR_TO_BIT(sb, alloc_hint), true);
 		if (nr != -1) {
 			nr += index << sb->shift;
 			break;
@@ -273,32 +296,9 @@ EXPORT_SYMBOL_GPL(sbitmap_bitmap_show);
 static unsigned int sbq_calc_wake_batch(struct sbitmap_queue *sbq,
 					unsigned int depth)
 {
-	unsigned int wake_batch;
-	unsigned int shallow_depth;
-
-	/*
-	 * For each batch, we wake up one queue. We need to make sure that our
-	 * batch size is small enough that the full depth of the bitmap,
-	 * potentially limited by a shallow depth, is enough to wake up all of
-	 * the queues.
-	 *
-	 * Each full word of the bitmap has bits_per_word bits, and there might
-	 * be a partial word. There are depth / bits_per_word full words and
-	 * depth % bits_per_word bits left over. In bitwise arithmetic:
-	 *
-	 * bits_per_word = 1 << shift
-	 * depth / bits_per_word = depth >> shift
-	 * depth % bits_per_word = depth & ((1 << shift) - 1)
-	 *
-	 * Each word can be limited to sbq->min_shallow_depth bits.
-	 */
-	shallow_depth = min(1U << sbq->sb.shift, sbq->min_shallow_depth);
-	depth = ((depth >> sbq->sb.shift) * shallow_depth +
-		 min(depth & ((1U << sbq->sb.shift) - 1), shallow_depth));
-	wake_batch = clamp_t(unsigned int, depth / SBQ_WAIT_QUEUES, 1,
-			     SBQ_WAKE_BATCH);
-
-	return wake_batch;
+	return clamp_t(unsigned int,
+		       min(depth, sbq->min_shallow_depth) / SBQ_WAIT_QUEUES,
+		       1, SBQ_WAKE_BATCH);
 }
 
 int sbitmap_queue_init_node(struct sbitmap_queue *sbq, unsigned int depth,

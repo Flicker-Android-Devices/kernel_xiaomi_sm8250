@@ -704,7 +704,7 @@ struct bfq_data {
 	 * Depth limits used in bfq_limit_depth (see comments on the
 	 * function)
 	 */
-	unsigned int word_depths[2][2];
+	unsigned int async_depths[2][2];
 };
 
 enum bfqq_state_flags {
