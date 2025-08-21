@@ -407,6 +407,9 @@ int blk_mq_tag_update_depth(struct blk_mq_hw_ctx *hctx,
 			return -ENOMEM;
 		}
 
+		/* Keep the new bitmap usable if a later hctx fails to grow. */
+		sbitmap_queue_min_shallow_depth(&new->bitmap_tags,
+					tags->bitmap_tags.min_shallow_depth);
 		blk_mq_free_rqs(set, *tagsptr, hctx->queue_num);
 		blk_mq_free_rq_map(*tagsptr);
 		*tagsptr = new;

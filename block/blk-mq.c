@@ -2960,12 +2960,14 @@ int blk_mq_update_nr_requests(struct request_queue *q, unsigned int nr)
 		}
 		if (ret)
 			break;
-		if (q->elevator && q->elevator->type->ops.mq.depth_updated)
-			q->elevator->type->ops.mq.depth_updated(hctx);
+
 	}
 
-	if (!ret)
+	if (!ret) {
 		q->nr_requests = nr;
+		if (q->elevator && q->elevator->type->ops.mq.depth_updated)
+			q->elevator->type->ops.mq.depth_updated(q);
+	}
 
 	blk_mq_unquiesce_queue(q);
 	blk_mq_unfreeze_queue(q);
