@@ -341,6 +341,14 @@ err:
 	return ERR_PTR(ret);
 }
 
+static void kyber_depth_updated(struct request_queue *q)
+{
+	struct kyber_queue_data *kqd = q->elevator->elevator_data;
+
+	kqd->async_depth = q->nr_requests * KYBER_ASYNC_PERCENT / 100U;
+	blk_mq_set_min_shallow_depth(q, kqd->async_depth);
+}
+
 static int kyber_init_sched(struct request_queue *q, struct elevator_type *e)
 {
 	struct kyber_queue_data *kqd;
@@ -358,6 +366,7 @@ static int kyber_init_sched(struct request_queue *q, struct elevator_type *e)
 
 	eq->elevator_data = kqd;
 	q->elevator = eq;
+	kyber_depth_updated(q);
 
 	blk_stat_add_callback(q, kqd->cb);
 
@@ -387,14 +396,7 @@ static void kyber_ctx_queue_init(struct kyber_ctx_queue *kcq)
 		INIT_LIST_HEAD(&kcq->rq_list[i]);
 }
 
-static void kyber_depth_updated(struct blk_mq_hw_ctx *hctx)
-{
-	struct kyber_queue_data *kqd = hctx->queue->elevator->elevator_data;
-	struct blk_mq_tags *tags = hctx->sched_tags;
 
-	kqd->async_depth = hctx->queue->nr_requests * KYBER_ASYNC_PERCENT / 100U;
-	sbitmap_queue_min_shallow_depth(&tags->bitmap_tags, kqd->async_depth);
-}
 
 static int kyber_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int hctx_idx)
 {
@@ -438,7 +440,6 @@ static int kyber_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int hctx_idx)
 	khd->batching = 0;
 
 	hctx->sched_data = khd;
-	kyber_depth_updated(hctx);
 
 	return 0;
 

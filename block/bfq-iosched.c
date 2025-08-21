@@ -5353,8 +5353,7 @@ void bfq_put_async_queues(struct bfq_data *bfqd, struct bfq_group *bfqg)
  * See the comments on bfq_limit_depth for the purpose of
  * the depths set in the function. Return minimum shallow depth we'll use.
  */
-static unsigned int bfq_update_depths(struct bfq_data *bfqd,
-				      struct sbitmap_queue *bt)
+static unsigned int bfq_update_depths(struct bfq_data *bfqd)
 {
 	unsigned int i, j, min_shallow = UINT_MAX;
 	unsigned int nr_requests = bfqd->queue->nr_requests;
@@ -5393,21 +5392,14 @@ static unsigned int bfq_update_depths(struct bfq_data *bfqd,
 	return min_shallow;
 }
 
-static void bfq_depth_updated(struct blk_mq_hw_ctx *hctx)
+static void bfq_depth_updated(struct request_queue *q)
 {
-	struct bfq_data *bfqd = hctx->queue->elevator->elevator_data;
-	struct blk_mq_tags *tags = hctx->sched_tags;
-	unsigned int min_shallow;
+	struct bfq_data *bfqd = q->elevator->elevator_data;
 
-	min_shallow = bfq_update_depths(bfqd, &tags->bitmap_tags);
-	sbitmap_queue_min_shallow_depth(&tags->bitmap_tags, min_shallow);
+	blk_mq_set_min_shallow_depth(q, bfq_update_depths(bfqd));
 }
 
-static int bfq_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int index)
-{
-	bfq_depth_updated(hctx);
-	return 0;
-}
+
 
 static void bfq_exit_queue(struct elevator_queue *e)
 {
@@ -5578,6 +5570,7 @@ static int bfq_init_queue(struct request_queue *q, struct elevator_type *e)
 	bfq_init_root_group(bfqd->root_group, bfqd);
 	bfq_init_entity(&bfqd->oom_bfqq.entity, bfqd->root_group);
 
+	bfq_depth_updated(q);
 	wbt_disable_default(q);
 	return 0;
 
@@ -5843,7 +5836,6 @@ static struct elevator_type iosched_bfq_mq = {
 		.request_merged		= bfq_request_merged,
 		.has_work		= bfq_has_work,
 		.depth_updated		= bfq_depth_updated,
-		.init_hctx		= bfq_init_hctx,
 		.init_sched		= bfq_init_queue,
 		.exit_sched		= bfq_exit_queue,
 		.elevator_registered_fn = bfq_registered_queue,

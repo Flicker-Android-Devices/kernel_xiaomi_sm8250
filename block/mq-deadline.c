@@ -656,23 +656,14 @@ static void dd_limit_depth(unsigned int op, struct blk_mq_alloc_data *data)
 }
 
 /* Called by blk_mq_update_nr_requests(). */
-static void dd_depth_updated(struct blk_mq_hw_ctx *hctx)
+static void dd_depth_updated(struct request_queue *q)
 {
-	struct request_queue *q = hctx->queue;
 	struct deadline_data *dd = q->elevator->elevator_data;
-	struct blk_mq_tags *tags = hctx->sched_tags;
 
 	dd->async_depth = q->nr_requests;
-
-	sbitmap_queue_min_shallow_depth(&tags->bitmap_tags, 1);
+	blk_mq_set_min_shallow_depth(q, 1);
 }
 
-/* Called by blk_mq_init_hctx() and blk_mq_init_sched(). */
-static int dd_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int hctx_idx)
-{
-	dd_depth_updated(hctx);
-	return 0;
-}
 
 static void dd_exit_sched(struct elevator_queue *e)
 {
@@ -741,6 +732,7 @@ static int dd_init_sched(struct request_queue *q, struct elevator_type *e)
 	spin_lock_init(&dd->zone_lock);
 
 	q->elevator = eq;
+	dd_depth_updated(q);
 	return 0;
 
 put_eq:
@@ -1263,7 +1255,6 @@ static struct elevator_type mq_deadline = {
 		.has_work		= dd_has_work,
 		.init_sched		= dd_init_sched,
 		.exit_sched		= dd_exit_sched,
-		.init_hctx		= dd_init_hctx,
 	},
 
 	.uses_mq	= true,
