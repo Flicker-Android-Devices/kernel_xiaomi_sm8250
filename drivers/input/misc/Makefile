@@ -91,3 +91,4 @@ else
 obj-$(CONFIG_INPUT_AW8697_HAPTIC)	+= aw8697_haptic/
 endif
 obj-$(CONFIG_INPUT_XIAOMI_KEYBOARD)	+= xiaomi_keyboard/
+obj-$(CONFIG_INPUT_PEN_BTN_REMAPPER)	+= pen_btn_remapper.o
