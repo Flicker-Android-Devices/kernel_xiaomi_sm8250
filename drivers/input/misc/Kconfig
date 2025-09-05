@@ -889,4 +889,18 @@ source "drivers/input/misc/aw8697_haptic/Kconfig"
 source "drivers/input/misc/aw86927_haptic/Kconfig"
 source "drivers/input/misc/xiaomi_keyboard/Kconfig"
 
+config INPUT_PEN_BTN_REMAPPER
+    tristate "Pen button event remapper for specific devices"
+    depends on INPUT
+    default n
+    help
+      This driver acts as a filter on the input subsystem. It allows
+      remapping of EV_KEY events (like pen buttons) from a specific
+      vendor/product ID device.
+
+      The target device and key mappings are hardcoded in the driver
+      source (pen_btn_remapper.c).
+
+      If you want to enable this feature, say Y.
+
 endif
