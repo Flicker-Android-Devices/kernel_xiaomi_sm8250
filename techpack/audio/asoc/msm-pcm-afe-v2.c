@@ -159,7 +159,7 @@ static void pcm_afe_process_tx_pkt(uint32_t opcode,
 		 void *priv)
 {
 	struct pcm_afe_info *prtd = priv;
-	unsigned long dsp_flags;
+	unsigned long dsp_flags = 0;
 	struct snd_pcm_substream *substream = NULL;
 	struct snd_pcm_runtime *runtime = NULL;
 	uint16_t event;
@@ -253,7 +253,7 @@ static void pcm_afe_process_rx_pkt(uint32_t opcode,
 		 void *priv)
 {
 	struct pcm_afe_info *prtd = priv;
-	unsigned long dsp_flags;
+	unsigned long dsp_flags = 0;
 	struct snd_pcm_substream *substream = NULL;
 	struct snd_pcm_runtime *runtime = NULL;
 	uint16_t event;
