@@ -334,29 +334,29 @@ int avcs_core_query_timer_offset(int64_t *av_offset, int32_t clock_id)
 {
 	uint32_t avtimer_msw = 0, avtimer_lsw = 0;
 	uint64_t avtimer_tick_temp, avtimer_tick, sys_time = 0;
-	struct timespec ts;
+	struct timespec64 ts;
 
 	if ((avtimer.p_avtimer_lsw == NULL) ||
 	    (avtimer.p_avtimer_msw == NULL)) {
 		return -EINVAL;
 	}
 
-	memset(&ts, 0, sizeof(struct timespec));
+	memset(&ts, 0, sizeof(struct timespec64));
 	avtimer_lsw = ioread32(avtimer.p_avtimer_lsw);
 	avtimer_msw = ioread32(avtimer.p_avtimer_msw);
 
 	switch (clock_id) {
 	case CLOCK_MONOTONIC_RAW:
-		getrawmonotonic(&ts);
+		ktime_get_raw_ts64(&ts);
 		break;
 	case CLOCK_BOOTTIME:
-		get_monotonic_boottime(&ts);
+		ktime_get_boottime_ts64(&ts);
 		break;
 	case CLOCK_MONOTONIC:
-		ktime_get_ts(&ts);
+		ktime_get_ts64(&ts);
 		break;
 	case CLOCK_REALTIME:
-		ktime_get_real_ts(&ts);
+		ktime_get_real_ts64(&ts);
 		break;
 	default:
 		pr_debug("%s: unsupported clock id %d\n", __func__, clock_id);
