@@ -1995,7 +1995,7 @@ int __init rtac_init(void)
 	mutex_init(&rtac_adm_mutex);
 	mutex_init(&rtac_adm_apr_mutex);
 
-	rtac_adm_buffer = kzalloc(
+	rtac_adm_buffer = kvzalloc(
 		rtac_cal[ADM_RTAC_CAL].map_data.map_size, GFP_KERNEL);
 	if (rtac_adm_buffer == NULL)
 		goto nomem;
@@ -2008,10 +2008,10 @@ int __init rtac_init(void)
 	}
 	mutex_init(&rtac_asm_apr_mutex);
 
-	rtac_asm_buffer = kzalloc(
+	rtac_asm_buffer = kvzalloc(
 		rtac_cal[ASM_RTAC_CAL].map_data.map_size, GFP_KERNEL);
 	if (rtac_asm_buffer == NULL) {
-		kzfree(rtac_adm_buffer);
+		kvfree(rtac_adm_buffer);
 		goto nomem;
 	}
 
@@ -2021,11 +2021,11 @@ int __init rtac_init(void)
 	init_waitqueue_head(&rtac_afe_apr_data.cmd_wait);
 	mutex_init(&rtac_afe_apr_mutex);
 
-	rtac_afe_buffer = kzalloc(
+	rtac_afe_buffer = kvzalloc(
 		rtac_cal[AFE_RTAC_CAL].map_data.map_size, GFP_KERNEL);
 	if (rtac_afe_buffer == NULL) {
-		kzfree(rtac_adm_buffer);
-		kzfree(rtac_asm_buffer);
+		kvfree(rtac_adm_buffer);
+		kvfree(rtac_asm_buffer);
 		goto nomem;
 	}
 
@@ -2039,20 +2039,20 @@ int __init rtac_init(void)
 	mutex_init(&rtac_voice_mutex);
 	mutex_init(&rtac_voice_apr_mutex);
 
-	rtac_voice_buffer = kzalloc(
+	rtac_voice_buffer = kvzalloc(
 		rtac_cal[VOICE_RTAC_CAL].map_data.map_size, GFP_KERNEL);
 	if (rtac_voice_buffer == NULL) {
-		kzfree(rtac_adm_buffer);
-		kzfree(rtac_asm_buffer);
-		kzfree(rtac_afe_buffer);
+		kvfree(rtac_adm_buffer);
+		kvfree(rtac_asm_buffer);
+		kvfree(rtac_afe_buffer);
 		goto nomem;
 	}
 
 	if (misc_register(&rtac_misc) != 0) {
-		kzfree(rtac_adm_buffer);
-		kzfree(rtac_asm_buffer);
-		kzfree(rtac_afe_buffer);
-		kzfree(rtac_voice_buffer);
+		kvfree(rtac_adm_buffer);
+		kvfree(rtac_asm_buffer);
+		kvfree(rtac_afe_buffer);
+		kvfree(rtac_voice_buffer);
 		goto nomem;
 	}
 
@@ -2064,10 +2064,10 @@ nomem:
 void rtac_exit(void)
 {
 	misc_deregister(&rtac_misc);
-	kzfree(rtac_adm_buffer);
-	kzfree(rtac_asm_buffer);
-	kzfree(rtac_afe_buffer);
-	kzfree(rtac_voice_buffer);
+	kvfree(rtac_adm_buffer);
+	kvfree(rtac_asm_buffer);
+	kvfree(rtac_afe_buffer);
+	kvfree(rtac_voice_buffer);
 }
 
 MODULE_DESCRIPTION("SoC QDSP6v2 Real-Time Audio Calibration driver");
