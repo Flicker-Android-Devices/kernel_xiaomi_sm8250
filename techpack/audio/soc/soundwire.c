@@ -106,7 +106,7 @@ struct swr_device *swr_new_device(struct swr_master *master,
 	struct swr_device *swr;
 
 	if (!master || !swr_master_get(master)) {
-		pr_err("%s: master is NULL\n", __func__);
+		pr_err_ratelimited("%s: master is NULL\n", __func__);
 		return NULL;
 	}
 
@@ -130,7 +130,7 @@ struct swr_device *swr_new_device(struct swr_master *master,
 	dev_set_name(&swr->dev, "%s.%llx", swr->name, swr->addr);
 	result = device_register(&swr->dev);
 	if (result) {
-		dev_err(&master->dev, "device [%s] register failed err %d\n",
+		dev_err_ratelimited(&master->dev, "device [%s] register failed err %d\n",
 			swr->name, result);
 		goto err_out;
 	}
@@ -170,12 +170,12 @@ int of_register_swr_devices(struct swr_master *master)
 		dev_dbg(&master->dev, "of_swr:register %s\n", node->full_name);
 
 		if (of_modalias_node(node, info.name, sizeof(info.name)) < 0) {
-			dev_err(&master->dev, "of_swr:modalias failure %s\n",
+			dev_err_ratelimited(&master->dev, "of_swr:modalias failure %s\n",
 				node->full_name);
 			continue;
 		}
 		if (of_property_read_u64(node, "reg", &addr)) {
-			dev_err(&master->dev, "of_swr:invalid reg %s\n",
+			dev_err_ratelimited(&master->dev, "of_swr:invalid reg %s\n",
 				node->full_name);
 			continue;
 		}
@@ -184,7 +184,7 @@ int of_register_swr_devices(struct swr_master *master)
 		master->num_dev++;
 		swr = swr_new_device(master, &info);
 		if (!swr) {
-			dev_err(&master->dev, "of_swr: Register failed %s\n",
+			dev_err_ratelimited(&master->dev, "of_swr: Register failed %s\n",
 				node->full_name);
 			of_node_put(node);
 			master->num_dev--;
@@ -209,7 +209,7 @@ void swr_port_response(struct swr_master *mstr, u8 tid)
 	txn = mstr->port_txn[tid];
 
 	if (txn == NULL) {
-		dev_err(&mstr->dev, "%s: transaction is already NULL\n",
+		dev_err_ratelimited(&mstr->dev, "%s: transaction is already NULL\n",
 			__func__);
 		return;
 	}
@@ -312,11 +312,11 @@ int swr_connect_port(struct swr_device *dev, u8 *port_id, u8 num_port,
 	struct swr_master *master = dev->master;
 
 	if (!master) {
-		pr_err("%s: Master is NULL\n", __func__);
+		pr_err_ratelimited("%s: Master is NULL\n", __func__);
 		return -EINVAL;
 	}
 	if (num_port > SWR_MAX_DEV_PORT_NUM) {
-		dev_err(&master->dev, "%s: num_port %d exceeds max port %d\n",
+		dev_err_ratelimited(&master->dev, "%s: num_port %d exceeds max port %d\n",
 			__func__, num_port, SWR_MAX_DEV_PORT_NUM);
 		return -EINVAL;
 	}
@@ -341,7 +341,7 @@ int swr_connect_port(struct swr_device *dev, u8 *port_id, u8 num_port,
 		if (master->last_tid == 255) {
 			mutex_unlock(&master->mlock);
 			kfree(txn);
-			dev_err(&master->dev, "%s Max tid reached\n",
+			dev_err_ratelimited(&master->dev, "%s Max tid reached\n",
 				__func__);
 			return -ENOMEM;
 		}
@@ -351,7 +351,7 @@ int swr_connect_port(struct swr_device *dev, u8 *port_id, u8 num_port,
 		if (!temp_txn) {
 			mutex_unlock(&master->mlock);
 			kfree(txn);
-			dev_err(&master->dev, "%s Not able to allocate\n"
+			dev_err_ratelimited(&master->dev, "%s Not able to allocate\n"
 				"master port transaction memory\n",
 				__func__);
 			return -ENOMEM;
@@ -399,12 +399,12 @@ int swr_disconnect_port(struct swr_device *dev, u8 *port_id, u8 num_port,
 	struct swr_master *master = dev->master;
 
 	if (!master) {
-		pr_err("%s: Master is NULL\n", __func__);
+		pr_err_ratelimited("%s: Master is NULL\n", __func__);
 		return -EINVAL;
 	}
 
 	if (num_port > SWR_MAX_DEV_PORT_NUM) {
-		dev_err(&master->dev, "%s: num_port %d exceeds max port %d\n",
+		dev_err_ratelimited(&master->dev, "%s: num_port %d exceeds max port %d\n",
 			__func__, num_port, SWR_MAX_DEV_PORT_NUM);
 		return -EINVAL;
 	}
@@ -422,7 +422,7 @@ int swr_disconnect_port(struct swr_device *dev, u8 *port_id, u8 num_port,
 		if (master->last_tid == 255) {
 			mutex_unlock(&master->mlock);
 			kfree(txn);
-			dev_err(&master->dev, "%s Max tid reached\n",
+			dev_err_ratelimited(&master->dev, "%s Max tid reached\n",
 				__func__);
 			return -ENOMEM;
 		}
@@ -432,7 +432,7 @@ int swr_disconnect_port(struct swr_device *dev, u8 *port_id, u8 num_port,
 		if (!temp_txn) {
 			mutex_unlock(&master->mlock);
 			kfree(txn);
-			dev_err(&master->dev, "%s Not able to allocate\n"
+			dev_err_ratelimited(&master->dev, "%s Not able to allocate\n"
 				"master port transaction memory\n",
 				__func__);
 			return -ENOMEM;
