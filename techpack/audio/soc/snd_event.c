@@ -78,7 +78,7 @@ static int check_and_update_fwk_state(void)
 				if (c->ops->enable) {
 					ret = c->ops->enable(c->dev, c->data);
 					if (ret) {
-						dev_err(c->dev,
+						dev_err_ratelimited(c->dev,
 							"%s: enable failed\n",
 							__func__);
 						goto dev_en_failed;
@@ -89,7 +89,7 @@ static int check_and_update_fwk_state(void)
 				ret = master->ops->enable(master->dev,
 							  master->data);
 				if (ret) {
-					dev_err(master->dev,
+					dev_err_ratelimited(master->dev,
 						"%s: enable failed\n",
 						__func__);
 					goto mstr_en_failed;
@@ -132,7 +132,7 @@ static int snd_event_find_clients(struct snd_master *master)
 		struct snd_event_client *c;
 
 		if (c_arr->dev) {
-			pr_err("%s: client already present dev=%pK\n",
+			pr_err_ratelimited("%s: client already present dev=%pK\n",
 				 __func__, c_arr->dev);
 			continue;
 		}
@@ -181,7 +181,7 @@ int snd_event_client_register(struct device *dev,
 	struct snd_event_client *c;
 
 	if (!dev) {
-		pr_err("%s: dev is NULL\n", __func__);
+		pr_err_ratelimited("%s: dev is NULL\n", __func__);
 		return -EINVAL;
 	}
 
@@ -228,7 +228,7 @@ int snd_event_client_deregister(struct device *dev)
 	int i = 0;
 
 	if (!dev) {
-		pr_err("%s: dev is NULL\n", __func__);
+		pr_err_ratelimited("%s: dev is NULL\n", __func__);
 		return -EINVAL;
 	}
 
@@ -289,7 +289,7 @@ void snd_event_mstr_add_client(struct snd_event_clients **snd_clients,
 	struct snd_event_clients *client = *snd_clients;
 
 	if (IS_ERR(client)) {
-		pr_err("%s: snd_clients is invalid\n", __func__);
+		pr_err_ratelimited("%s: snd_clients is invalid\n", __func__);
 		return;
 	}
 
@@ -412,7 +412,7 @@ int snd_event_master_deregister(struct device *dev)
 	int ret = 0;
 
 	if (!dev) {
-		pr_err("%s: dev is NULL\n", __func__);
+		pr_err_ratelimited("%s: dev is NULL\n", __func__);
 		return -EINVAL;
 	}
 
@@ -458,20 +458,20 @@ int snd_event_notify(struct device *dev, unsigned int state)
 	int ret = 0;
 
 	if (!dev) {
-		pr_err("%s: dev is NULL\n", __func__);
+		pr_err_ratelimited("%s: dev is NULL\n", __func__);
 		return -EINVAL;
 	}
 
 	mutex_lock(&snd_event_mutex);
 	if (list_empty(&snd_event_client_list) && !master) {
-		dev_err(dev, "%s: No device registered\n", __func__);
+		dev_err_ratelimited(dev, "%s: No device registered\n", __func__);
 		ret = -ENODEV;
 		goto exit;
 	}
 
 	c = find_snd_event_client(dev);
 	if (!c && (!master || (master->dev != dev))) {
-		dev_err(dev, "%s: No snd dev entry found\n", __func__);
+		dev_err_ratelimited(dev, "%s: No snd dev entry found\n", __func__);
 		ret = -ENXIO;
 		goto exit;
 	}
