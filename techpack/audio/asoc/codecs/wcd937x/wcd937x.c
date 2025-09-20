@@ -2837,7 +2837,7 @@ static int wcd937x_reset(struct device *dev)
 	if (rc) {
 		dev_err(dev, "%s: wcd sleep state request fail!\n",
 				__func__);
-		return rc;
+		return -EPROBE_DEFER;
 	}
 	/* 20ms sleep required after pulling the reset gpio to LOW */
 	usleep_range(20, 30);
@@ -2846,7 +2846,7 @@ static int wcd937x_reset(struct device *dev)
 	if (rc) {
 		dev_err(dev, "%s: wcd active state request fail!\n",
 				__func__);
-		return rc;
+		return -EPROBE_DEFER;
 	}
 	/* 20ms sleep required after pulling the reset gpio to HIGH */
 	usleep_range(20, 30);
@@ -3070,7 +3070,11 @@ static int wcd937x_bind(struct device *dev)
 		goto err_bind_all;
 	}
 
-	wcd937x_reset(dev);
+	ret = wcd937x_reset(dev);
+	if (ret == -EPROBE_DEFER) {
+		dev_err(dev, "%s: wcd reset failed!\n", __func__);
+		goto err_bind_all;
+	}
 	/*
 	 * Add 5msec delay to provide sufficient time for
 	 * soundwire auto enumeration of slave devices as
