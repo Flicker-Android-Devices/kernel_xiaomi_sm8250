@@ -895,9 +895,6 @@ correct_plug_type:
 			wrk_complete = false;
 		}
 	}
-	if (mbhc->mbhc_cb->bcs_enable)
-		mbhc->mbhc_cb->bcs_enable(mbhc, true);
-
 	if (!wrk_complete) {
 		/*
 		 * If plug_tye is headset, we might have already reported either
@@ -952,6 +949,9 @@ enable_supply:
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_DETECTION_DONE, 1);
 	else
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_DETECTION_DONE, 0);
+
+	if (mbhc->mbhc_cb->bcs_enable)
+		mbhc->mbhc_cb->bcs_enable(mbhc, true);
 
 	if (mbhc->mbhc_cb->mbhc_micbias_control)
 		wcd_mbhc_adc_update_fsm_source(mbhc, plug_type);
