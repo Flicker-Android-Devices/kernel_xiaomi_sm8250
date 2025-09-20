@@ -352,7 +352,7 @@ static int wcd_check_cross_conn(struct wcd_mbhc *mbhc)
 	if (mbhc->mbhc_cb->update_cross_conn_thr)
 		mbhc->mbhc_cb->update_cross_conn_thr(mbhc);
 
-	if (hphl_adc_res > mbhc->hphl_cross_conn_thr ||
+	if (hphl_adc_res > mbhc->hphl_cross_conn_thr &&
 	    hphr_adc_res > mbhc->hphr_cross_conn_thr) {
 		plug_type = MBHC_PLUG_TYPE_GND_MIC_SWAP;
 		pr_debug("%s: Cross connection identified\n", __func__);
