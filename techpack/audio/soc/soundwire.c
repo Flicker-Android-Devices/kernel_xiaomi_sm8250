@@ -951,11 +951,6 @@ int swr_register_master(struct swr_master *master)
 		return id;
 
 	master->bus_num = id;
-	/* Can't register until driver model init */
-	if (WARN_ON(!soundwire_type.p)) {
-		status = -EAGAIN;
-		goto done;
-	}
 
 	dev_set_name(&master->dev, "swr%u", master->bus_num);
 	master->dev.bus = &soundwire_type;
