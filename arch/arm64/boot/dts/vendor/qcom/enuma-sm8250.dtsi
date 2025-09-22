@@ -104,7 +104,7 @@ And public attribution of xiaomi platforms(like enuma and so and)
 
 &usb1 {
 	status = "ok";
-	qcom,ignore-wakeup-src-in-hostmode;
+	/* qcom,ignore-wakeup-src-in-hostmode; */
 
 	dwc3@a800000 {
 		dr_mode = "host";
