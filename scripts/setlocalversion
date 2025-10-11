@@ -193,9 +193,9 @@ fi
 
 # localversion* files in the build and source directory
 res="$(collect_files localversion*)"
-if test ! "$srctree" -ef .; then
-	res="$res$(collect_files "$srctree"/localversion*)"
-fi
+# if test ! "$srctree" -ef .; then
+# 	res="$res$(collect_files "$srctree"/localversion*)"
+# fi
 
 # CONFIG_LOCALVERSION and LOCALVERSION (if set)
 res="${res}${CONFIG_LOCALVERSION}${LOCALVERSION}"
