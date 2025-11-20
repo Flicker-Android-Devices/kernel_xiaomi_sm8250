@@ -678,6 +678,9 @@ static int msm_restart_probe(struct platform_device *pdev)
 
 	force_warm_reboot = of_property_read_bool(dev->of_node,
 						"qcom,force-warm-reboot");
+#ifdef CONFIG_PSTORE_LAST_KMSG
+    force_warm_reboot = true;
+#endif
 
 	return 0;
 
