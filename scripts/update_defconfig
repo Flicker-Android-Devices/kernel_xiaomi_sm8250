@@ -10,14 +10,16 @@
 KERNEL_TOP=$(pwd)
 KERNEL_CFG=arch/arm64/configs/vendor/xiaomi
 OUT_DIR=$KERNEL_TOP/temp
+ROM_TOP=$(pwd | awk -F/ '{print "/"$2"/"$3"/"$4"/"$5}')
 export KERNEL_TOP
 export KERNEL_CFG
 export OUT_DIR
+export ROM_TOP
 
 # Set compiler PATH
-CLANG=~/rom/pixos/prebuilts/clang/host/linux-x86/clang-r547379/bin/
-GCC64=~/rom/pixos/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/
-GCC32=~/rom/pixos/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/bin/
+CLANG="$ROM_TOP/prebuilts/clang/host/linux-x86/clang-r547379/bin/"
+GCC64="$ROM_TOP/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/"
+GCC32="$ROM_TOP/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/bin/"
 export PATH=$CLANG:$GCC64:$GCC32:$PATH
 export ARCH=arm64
 export CLANG_TRIPLE="aarch64-linux-gnu-"
