@@ -24,3 +24,11 @@ config TOUCHSCREEN_ST_DEBUG_FS
           Say Y here to enable touch debugfs functionality.
 
           If unsure, say N.
+
+config TOUCHSCREEN_ST_FTS_DEBUG
+	tristate "Enable debug"
+	depends on TOUCHSCREEN_ST_FTS_V521_SPI
+	help 
+          Say Y here to enable debugging.
+
+          If unsure, say N.
