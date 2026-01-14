@@ -22,5 +22,13 @@ config TOUCHSCREEN_ST_I2C
 	help
 	 This enables support for ST touch panel over I2C based touchscreens.
 
+config TOUCHSCREEN_ST_FTS_DEBUG
+	tristate "Enable debug"
+	depends on TOUCHSCREEN_ST
+	help 
+          Say Y here to enable debugging.
+
+          If unsure, say N.
+
 #endif
 
