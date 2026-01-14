@@ -68,6 +68,7 @@ static char tag[8] = "[ FTS ]\0";
 void logError(int force, const char *msg, ...)
 {
 
+#ifdef CONFIG_TOUCHSCREEN_ST_FTS_DEBUG
 	if (force == 1
 #ifdef DEBUG
 		|| 1
@@ -79,6 +80,7 @@ void logError(int force, const char *msg, ...)
 		vprintk(msg, args);
 		va_end(args);
 	}
+#endif
 }
 
 int isI2cError(int error)
