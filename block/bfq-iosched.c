@@ -534,7 +534,7 @@ static void bfq_limit_depth(unsigned int op, struct blk_mq_alloc_data *data)
 {
 	struct bfq_data *bfqd = data->q->elevator->elevator_data;
 
-	if (op_is_sync(op) && !op_is_write(op))
+	if (blk_mq_is_sync_read(op))
 		return;
 
 	data->shallow_depth =
