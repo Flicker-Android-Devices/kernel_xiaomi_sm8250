@@ -2697,6 +2697,7 @@ struct request_queue *blk_mq_init_allocated_queue(struct blk_mq_tag_set *set,
 	 * Do this after blk_queue_make_request() overrides it...
 	 */
 	q->nr_requests = set->queue_depth;
+	q->async_depth = set->queue_depth;
 
 	/*
 	 * Default to classic polling
@@ -2964,6 +2965,9 @@ int blk_mq_update_nr_requests(struct request_queue *q, unsigned int nr)
 	}
 
 	if (!ret) {
+		/* Preserve the configured fraction without overflowing on 4.19. */
+		q->async_depth = max_t(unsigned int,
+			div_u64((u64)q->async_depth * nr, q->nr_requests), 1);
 		q->nr_requests = nr;
 		if (q->elevator && q->elevator->type->ops.mq.depth_updated)
 			q->elevator->type->ops.mq.depth_updated(q);

@@ -1085,6 +1085,7 @@ struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id,
 	if (blkcg_init_queue(q))
 		goto fail_ref;
 
+	q->async_depth = BLKDEV_MAX_RQ;
 	return q;
 
 fail_ref:

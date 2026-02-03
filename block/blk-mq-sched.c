@@ -555,6 +555,7 @@ int blk_mq_init_sched(struct request_queue *q, struct elevator_type *e)
 	if (!e) {
 		q->elevator = NULL;
 		q->nr_requests = q->tag_set->queue_depth;
+		q->async_depth = q->tag_set->queue_depth;
 		return 0;
 	}
 
@@ -565,6 +566,7 @@ int blk_mq_init_sched(struct request_queue *q, struct elevator_type *e)
 	 */
 	q->nr_requests = 2 * min_t(unsigned int, q->tag_set->queue_depth,
 				   BLKDEV_MAX_RQ);
+	q->async_depth = q->nr_requests;
 
 	queue_for_each_hw_ctx(q, hctx, i) {
 		ret = blk_mq_sched_alloc_tags(q, hctx, i);

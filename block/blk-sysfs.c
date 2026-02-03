@@ -11,6 +11,7 @@
 #include <linux/blktrace_api.h>
 #include <linux/blk-mq.h>
 #include <linux/blk-cgroup.h>
+#include <linux/elevator.h>
 
 #include "blk.h"
 #include "blk-mq.h"
@@ -85,6 +86,40 @@ queue_requests_store(struct request_queue *q, const char *page, size_t count)
 
 	if (err)
 		return err;
+
+	return ret;
+}
+
+static ssize_t queue_async_depth_show(struct request_queue *q, char *page)
+{
+	return queue_var_show(q->async_depth, page);
+}
+
+static ssize_t
+queue_async_depth_store(struct request_queue *q, const char *page, size_t count)
+{
+	unsigned long nr;
+	int ret;
+
+	if (!q->mq_ops)
+		return -EINVAL;
+
+	ret = queue_var_store(&nr, page, count);
+	if (ret < 0)
+		return ret;
+	if (!nr)
+		return -EINVAL;
+
+	/* queue_attr_store holds sysfs_lock, also used by scheduler switching. */
+	blk_mq_freeze_queue(q);
+	if (q->elevator) {
+		q->async_depth = min_t(unsigned long, q->nr_requests, nr);
+		if (q->elevator->type->ops.mq.depth_updated)
+			q->elevator->type->ops.mq.depth_updated(q);
+	} else {
+		ret = -EINVAL;
+	}
+	blk_mq_unfreeze_queue(q);
 
 	return ret;
 }
@@ -703,8 +738,15 @@ static struct queue_sysfs_entry throtl_sample_time_entry = {
 };
 #endif
 
+static struct queue_sysfs_entry queue_async_depth_entry = {
+	.attr = {.name = "async_depth", .mode = 0644 },
+	.show = queue_async_depth_show,
+	.store = queue_async_depth_store,
+};
+
 static struct attribute *default_attrs[] = {
 	&queue_requests_entry.attr,
+	&queue_async_depth_entry.attr,
 	&queue_ra_entry.attr,
 	&queue_max_hw_sectors_entry.attr,
 	&queue_max_sectors_entry.attr,

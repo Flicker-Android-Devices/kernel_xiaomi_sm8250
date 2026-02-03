@@ -686,6 +686,8 @@ struct request_queue {
 
 #define BLK_MAX_WRITE_HINTS	5
 	u64			write_hints[BLK_MAX_WRITE_HINTS];
+
+	unsigned int		async_depth;	/* Max # of async requests */
 };
 
 #define QUEUE_FLAG_QUEUED	0	/* uses generic tag queueing */
