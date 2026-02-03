@@ -103,4 +103,9 @@ static inline void blk_mq_set_min_shallow_depth(struct request_queue *q,
 				&hctx->sched_tags->bitmap_tags, depth);
 }
 
+static inline bool blk_mq_is_sync_read(unsigned int op)
+{
+	return op_is_sync(op) && !op_is_write(op);
+}
+
 #endif
