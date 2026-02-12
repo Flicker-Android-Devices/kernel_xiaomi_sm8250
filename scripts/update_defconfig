@@ -18,17 +18,12 @@ export ROM_TOP
 
 # Set compiler PATH
 CLANG="$ROM_TOP/prebuilts/clang/host/linux-x86/clang-r547379/bin/"
-GCC64="$ROM_TOP/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/"
-GCC32="$ROM_TOP/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/bin/"
-export PATH=$CLANG:$GCC64:$GCC32:$PATH
+export PATH=$CLANG:$PATH
 export ARCH=arm64
 export CLANG_TRIPLE="aarch64-linux-gnu-"
-export CROSS_COMPILE="aarch64-linux-android-"
-export CROSS_COMPILE_ARM32="arm-linux-androideabi-"
 
 BUILD="make O=$OUT_DIR \
 CC=clang \
-HOSTCC=gcc \
 LD=ld.lld \
 AS=llvm-as \
 AR=llvm-ar \
