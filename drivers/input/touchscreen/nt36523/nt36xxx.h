@@ -210,6 +210,9 @@ struct nvt_ts_data {
 	int result_type;
 	int panel_index;
 	uint32_t spi_max_freq;
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+	int fw_switch;
+#endif
 #ifdef CONFIG_TOUCHSCREEN_NVT_DEBUG_FS
 	struct dentry *debugfs;
 #endif
