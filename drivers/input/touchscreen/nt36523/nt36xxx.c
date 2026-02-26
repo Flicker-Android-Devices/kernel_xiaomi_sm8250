@@ -192,6 +192,32 @@ static struct tp_common_ops pen_ops = {
 	.show = pen_show,
 	.store = pen_store,
 };
+
+static ssize_t fw_switch_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return sprintf(buf, "%d\n", ts->fw_switch);
+}
+
+static ssize_t fw_switch_store(struct kobject *kobj, struct kobj_attribute *attr,
+			 const char *buf, size_t count)
+{
+	int rc, val;
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc)
+		return -EINVAL;
+
+	ts->fw_switch = !!val;
+	nvt_switch_pen_firmware(!!val);
+
+	return count;
+}
+
+static struct tp_common_ops fw_switch_ops = {
+	.show = fw_switch_show,
+	.store = fw_switch_store,
+};
 #endif
 
 #ifdef CONFIG_MTK_SPI
@@ -3250,6 +3276,12 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		ret = tp_common_set_pen_ops(&pen_ops);
 		if (ret < 0) {
 			NVT_ERR("%s: Failed to create pen node err=%d\n",
+				__func__, ret);
+		}
+
+		ret = tp_common_set_fw_switch_ops(&fw_switch_ops);
+		if (ret < 0) {
+			NVT_ERR("%s: Failed to create fw_switch node err=%d\n",
 				__func__, ret);
 		}
 #endif
