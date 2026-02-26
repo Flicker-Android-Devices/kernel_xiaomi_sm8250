@@ -26,6 +26,7 @@ TS_ENABLE_FOPS(fp_state)
 TS_ENABLE_FOPS(reversed_keys)
 TS_ENABLE_NOTIFY(fp_state)
 TS_ENABLE_FOPS(pen)
+TS_ENABLE_FOPS(fw_switch)
 
 static int __init tp_common_init(void)
 {
