@@ -235,7 +235,7 @@ static inline bool userfaultfd_huge_must_wait(struct userfaultfd_ctx *ctx,
 	pte_t *ptep, pte;
 	bool ret = true;
 
-	VM_BUG_ON(!rwsem_is_locked(&mm->mmap_locked));
+	VM_BUG_ON(!rwsem_is_locked(&mm->mmap_lock));
 
 	ptep = huge_pte_offset(mm, address, vma_mmu_pagesize(vma));
 
