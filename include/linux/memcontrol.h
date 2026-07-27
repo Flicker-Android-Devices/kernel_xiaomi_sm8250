@@ -382,6 +382,9 @@ static inline struct lruvec *mem_cgroup_lruvec(struct pglist_data *pgdat,
 		goto out;
 	}
 
+	if (!memcg)
+		memcg = root_mem_cgroup;
+
 	mz = mem_cgroup_nodeinfo(memcg, pgdat->node_id);
 	lruvec = &mz->lruvec;
 out:
@@ -569,7 +572,7 @@ static inline bool mem_cgroup_trylock_pages(struct mem_cgroup *memcg)
 {
 	rcu_read_lock();
 
-	if (mem_cgroup_disabled() || !atomic_read(&memcg->moving_account))
+	if (mem_cgroup_disabled() || !memcg || !atomic_read(&memcg->moving_account))
 		return true;
 
 	rcu_read_unlock();
