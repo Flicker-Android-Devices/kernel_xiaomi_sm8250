@@ -2547,6 +2547,11 @@ int mi_dsi_panel_read_and_update_dc_param_v2(struct dsi_panel *panel)
 	for (i = 0; i < total_modes; i++) {
 		mode = &display->modes[i];
 
+		if (panel->mi_cfg.panel_id == 0x4C334100420200 && mode->timing.refresh_rate == 120) {
+			pr_info("l3a: skip overriding 120Hz CSOT DC parameters\n");
+			continue;
+		}
+
 		cmds = mode->priv_info->cmd_sets[DSI_CMD_SET_MI_DC_OFF].cmds;
 		count = mode->priv_info->cmd_sets[DSI_CMD_SET_MI_DC_OFF].count;
 		if (dc_cfg[DC_LUT_D2]->read_done) {
