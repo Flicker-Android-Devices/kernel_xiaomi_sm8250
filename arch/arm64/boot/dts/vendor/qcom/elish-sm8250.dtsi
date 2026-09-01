@@ -327,6 +327,7 @@ And public attribution of xiaomi platforms(like elish and so and)
 		ktz8866,hwen-gpio = <&tlmm 139 0x00>;
 		ktz8866,enp-gpio = <&tlmm 130 0x00>;
 		ktz8866,enn-gpio = <&tlmm 131 0x00>;
+		ktz8866,panelid-gpio = <&tlmm 38 0x00>;
 	};
 };
 
