@@ -1,11 +1,11 @@
 /*
 this file is for attribution only of umi
-And public attribution of xiaomi platforms(like enuma and so and)
+And public attribution of xiaomi platforms(like dagu and so and)
 */
 
-#include "enuma-pinctrl.dtsi"
+#include "dagu-pinctrl.dtsi"
 #include "xiaomi-sm8250-common.dtsi"
-#include "enuma-audio-overlay.dtsi"
+#include "dagu-audio-overlay.dtsi"
 
 &firmware {
 	android {
@@ -19,23 +19,6 @@ And public attribution of xiaomi platforms(like enuma and so and)
 			compatible = "android,fstab";
 		};
 	};
-};
-
-/*IC int pin, rst pin init*/
-&tlmm {
-        /* GPIO_23 : FP_INT_N */
-        msm_gpio_23: msm_gpio_23 {
-                mux {
-                        pins = "gpio23";
-                        function = "gpio";
-                };
-                config {
-                        pins = "gpio23";
-                        drive-strength = <2>;
-                        bias-pull-down;
-                };
-        };
-
 };
 
 &soc {
@@ -60,7 +43,6 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		pinctrl-names = "default";
 		pinctrl-0 = <&display_panel_enp_default>;
 	};
-
 	display_panel_enn: display_gpio_regulator_enn {
 		compatible = "regulator-fixed";
 		regulator-name = "display_panel_enn";
@@ -73,25 +55,24 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		pinctrl-names = "default";
 		pinctrl-0 = <&display_panel_enn_default>;
 	};
-	xiaomi_keyboard {
-		compatible = "xiaomi,keyboard";
-		pinctrl-names = "pm_kb_active", "pm_kb_suspend";
-		pinctrl-0 = <&xiaomi_keyboard_active>;
-		pinctrl-1 = <&xiaomi_keyboard_suspend>;
-		xiaomi-keyboard,rst-gpio = <&tlmm 141 0x00>;
-		xiaomi-keyboard,in-irq-gpio = <&tlmm 83 0x2001>;
-		xiaomi-keyboard,vdd-gpio = <&tlmm 127 0x00>;
-		status = "ok";
-	};
+};
 
-	md_testing_mode {
-		compatible = "modem,md-testing-mode";
-		status-gpio = <&tlmm 111 0x00>;
-		debounce-time = <30>;
+&qupv3_se2_i2c {
+	status = "ok";
+	nanosic@4c{
+		compatible = "nanosic,803";
+		reg = <0x4c>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&ant1_ctrl_irq>;
+		pinctrl-0 = <&xiaomi_keyboard_sleep_default
+					&xiaomi_keyboard_default>;
+		irq_pin = <&tlmm 83 0x6002>;/*IRQF_ONESHOT | IRQF_TRIGGER_FALLING | IRQF_NO_SUSPEND*/
+		reset_pin  = <&tlmm 141 0x00>;
+		status_pin = <&tlmm 46 0x00>;
+		vdd_pin = <&tlmm 127 0x00>;
+		sleep_pin = <&tlmm 155 0x00>;
+		hall_n_pin = <&tlmm 110 0x00>;
+		hall_s_pin = <&tlmm 121 0x00>;
 	};
-
 };
 
 &qupv3_se2_spi {
@@ -101,31 +82,100 @@ And public attribution of xiaomi platforms(like enuma and so and)
 &touch_vddio_vreg {
 	status = "disabled";
 };
-
-&usb1 {
-	status = "ok";
-	qcom,ignore-wakeup-src-in-hostmode;
-
-	dwc3@a800000 {
-		dr_mode = "host";
-	};
-};
-
-&usb2_phy1 {
-        status = "ok";
-};
-
-&usb_qmp_phy {
-        status = "ok";
-};
-
 &sde_dsi {
 	enp-supply = <&display_panel_enp>;
 	enn-supply = <&display_panel_enn>;
 };
 
+&L7A {
+	regulator-min-microvolt = <1832000>;
+	regulator-max-microvolt = <1832000>;
+	qcom,init-voltage = <1832000>;
+};
 
+&sde_dsi {
+	vddio-supply = <&L7A>;
+};
 
+&mdss_dsi0_pll{
+	qcom,dsi-pll-ssc-disable;
+};
+
+&mdss_dsi1_pll {
+	qcom,dsi-pll-ssc-disable;
+};
+
+&dsi_panel_pwr_supply_vci{
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+		qcom,panel-supply-entry@0 {
+			reg = <0>;
+			qcom,supply-name = "vddio";
+			qcom,supply-min-voltage = <1832000>;
+			qcom,supply-max-voltage = <1832000>;
+			qcom,supply-enable-load = <62000>;
+			qcom,supply-disable-load = <80>;
+			qcom,supply-pre-on-sleep = <0>;
+			qcom,supply-pre-off-sleep = <0>;
+			qcom,supply-post-on-sleep = <3>;
+			qcom,supply-post-off-sleep = <0>;
+		};
+
+		qcom,panel-supply-entry@1 {
+			reg = <1>;
+			qcom,supply-name = "vci";
+			qcom,supply-min-voltage = <3000000>;
+			qcom,supply-max-voltage = <3000000>;
+			qcom,supply-enable-load = <100000>;
+			qcom,supply-disable-load = <100>;
+			qcom,supply-pre-on-sleep = <0>;
+			qcom,supply-pre-off-sleep = <0>;
+			qcom,supply-post-on-sleep = <10>;
+			qcom,supply-post-off-sleep = <0>;
+		};
+};
+
+&dsi_panel_pwr_supply_l81a{
+	#address-cells = <1>;
+	#size-cells = <0>;
+	qcom,panel-supply-entry@0 {
+		reg = <0>;
+		qcom,supply-name = "vddio";
+		qcom,supply-min-voltage = <1832000>;
+		qcom,supply-max-voltage = <1832000>;
+		qcom,supply-enable-load = <62000>;
+		qcom,supply-disable-load = <80>;
+		qcom,supply-post-on-sleep = <10>;
+		qcom,supply-post-off-sleep = <10>;
+	};
+
+	qcom,panel-supply-entry@1 {
+		reg = <1>;
+		qcom,supply-name = "enp";
+		qcom,supply-min-voltage = <5500000>;
+		qcom,supply-max-voltage = <5500000>;
+		qcom,supply-enable-load = <100000>;
+		qcom,supply-disable-load = <100>;
+		qcom,supply-pre-on-sleep = <0>;
+		qcom,supply-pre-off-sleep = <0>;
+		qcom,supply-post-on-sleep = <10>;
+		qcom,supply-post-off-sleep = <10>;
+	};
+
+	qcom,panel-supply-entry@2 {
+		reg = <2>;
+		qcom,supply-name = "enn";
+		qcom,supply-min-voltage = <5500000>;
+		qcom,supply-max-voltage = <5500000>;
+		qcom,supply-enable-load = <100000>;
+		qcom,supply-disable-load = <100>;
+		qcom,supply-pre-on-sleep = <0>;
+		qcom,supply-pre-off-sleep = <0>;
+		qcom,supply-post-on-sleep = <10>;
+		qcom,supply-post-off-sleep = <10>;
+	};
+};
 
 &ts_active {
 	mux {
@@ -178,116 +228,51 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		bias-disable;
 	};
 };
-&tlmm {
-	ts_mux {
-		ts_cs_active: ts_cs_active {
-			mux {
-				pins = "gpio11";
-				function = "qup4";
-			};
 
-			config {
-				pins = "gpio11";
-				drive-strength = <6>;
-				bias-disable;
-			};
-		};
-
-		ts_cs_suspend: ts_cs_suspend {
-			mux {
-				pins = "gpio11";
-				function = "gpio";
-			};
-
-			config {
-				pins = "gpio11";
-				drive-strength = <6>;
-				bias-pull-down;
-				output-low;
-			};
-		};
-	};
+&qupv3_se5_4uart {
+	status = "ok";
 };
-
-
-&qupv3_se4_spi_active {
-	mux {
-		pins = "gpio8", "gpio9", "gpio10";
-		function = "qup4";
-	};
-
-	config {
-		pins = "gpio8", "gpio9", "gpio10";
-		drive-strength = <6>;
-		bias-disable;
-	};
-};
-
-&qupv3_se4_spi_sleep {
-	mux {
-		pins = "gpio8", "gpio9", "gpio10";
-		function = "gpio";
-	};
-
-	config {
-		pins = "gpio8", "gpio9", "gpio10";
-		drive-strength = <6>;
-		bias-disable;
-	};
-};
-
 
 &qupv3_se4_spi {
 	status = "ok";
-	qcom,rt;
-	pinctrl-0 = <&qupv3_se4_spi_active>;
-	pinctrl-1 = <&qupv3_se4_spi_sleep>;
-	novatek@0 {
-		compatible = "novatek,NVT-ts-spi";
-		reg = <0>; //Same as CS ID
-		status = "ok";
-
-		pinctrl-0 = <&ts_cs_active>;
-		pinctrl-1 = <&ts_cs_suspend>;
-		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
-		spi-max-frequency = <19200000>;	//4800000,9600000,15000000,19200000
-		//novatek,reset-gpio = <&tlmm 75 0x00>;
-		novatek,irq-gpio = <&tlmm 39 0x2001>;
-
-		novatek,pen-support;
-		novatek,wgp-stylus;
-
-		/*  523 */
-		novatek,swrst-n8-addr = <0x03F0FE>;
-		novatek,spi-rd-fast-addr = <0x03F310>;
-
-		/* MP */
-		novatek,mp-support-dt;
+	himax_ts@0 {
+		compatible = "himax,hxcommon";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+		spi-cpha;
+		interrupt-parent = <&tlmm>;
+		himax,panel-coords = <0 1600 0 2560>;
+		himax,display-coords = <0 1600 0 2560>;
+		himax,irq-gpio = <&tlmm 39 0x2008>;
+		himax,rst-gpio = <&tlmm 100 0x00>;
+		report_type = <1>;
 
 		/*new touch faeature default param*/
-		novatek,touch-game-param-config1 = <2 2 1 2 1>;
-		novatek,touch-game-param-config2 = <2 2 2 2 1>;
-		novatek,touch-game-param-config3 = <2 2 3 2 1>;
-
-		novatek,config-array-size = <1>;
-		novatek,cfg_0 {
-			novatek,display-maker = <0x42>;
-			novatek,fw-name = "novatek_nt36523_k81_fw01.bin";
-			novatek,mp-name = "novatek_nt36523_k81_mp01.bin";
+		himax,touch-game-param-config1 = <2 2 1 2 1>;
+		himax,touch-game-param-config2 = <2 2 2 2 1>;
+		himax,touch-game-param-config3 = <2 2 3 2 1>;
 		};
-	};
 };
 
-/* K81 Backlight Driver SE 11 pin mappings */
+/* L81A Backlight Driver SE 11 pin mappings */
 &qupv3_se11_i2c {
 	status = "ok";
 	ktz8866@11 {
-		compatible = "ktz,ktz8866";
+		compatible = "ktz,ktz8866a";
 		status = "ok";
 		reg = <0x11>;
 		ktz8866,hwen-gpio = <&tlmm 139 0x00>;
-		ktz8866,enp-gpio = <&tlmm 130 0x00>;
-		ktz8866,enn-gpio = <&tlmm 131 0x00>;
+	};
+};
+
+/* L81A Backlight Driver SE 9 pin mappings */
+&qupv3_se9_i2c {
+	status = "ok";
+	ktz8866@11 {
+		compatible = "ktz,ktz8866b";
+		status = "ok";
+		reg = <0x11>;
+		ktz8866,hwen-gpio = <&tlmm 139 0x00>;
 	};
 };
 
@@ -304,6 +289,12 @@ And public attribution of xiaomi platforms(like enuma and so and)
 	qcom,string-cfg = <7>;
 };
 
+&ufshc_mem {
+	hsg4_synclength = /bits/ 16 <0x145 0x4F
+				     0x0 0x0
+				     0x0 0x0>;
+};
+
 &qupv3_se15_i2c {
 	status = "ok";
 	nq@64 {
@@ -316,11 +307,11 @@ And public attribution of xiaomi platforms(like enuma and so and)
 };
 
 &sde_dp {
-	status = "disabled";
+	status = "ok";
 };
 
 &mdss_mdp {
-	connectors = <&sde_wb &sde_dsi &sde_dsi1 &sde_rscc>;
+	connectors = <&sde_dp &sde_wb &sde_dsi &sde_dsi1 &sde_rscc>;
 };
 
 &dsi_sim_vid {
@@ -330,6 +321,34 @@ And public attribution of xiaomi platforms(like enuma and so and)
 
 &pm8150a_amoled {
 	status = "disabled";
+};
+
+&usb0 {
+	dwc3@a600000 {
+		usb-phy = <&usb2_phy0>, <&usb_qmp_dp_phy>;
+		maximum-speed = "super-speed";
+	};
+};
+
+&usb_qmp_dp_phy {
+	status = "ok";
+};
+
+&usb1 {
+	status = "disable";
+	qcom,ignore-wakeup-src-in-hostmode;
+
+	dwc3@a800000 {
+		dr_mode = "host";
+	};
+};
+
+&usb2_phy1 {
+        status = "ok";
+};
+
+&usb_qmp_phy {
+        status = "ok";
 };
 
 
@@ -361,200 +380,57 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		};
 	};
 
-	fingerprint_goodix {
-		compatible = "goodix,fingerprint";
-		goodix,gpio-reset = <&tlmm 125 GPIO_ACTIVE_LOW>;
-		goodix,gpio-irq = <&tlmm 23 GPIO_ACTIVE_HIGH>;
-		fp_vdd_vreg-supply = <&L10A>;
-		status = "ok";
-	};
-
-	fingerprint_fpc {
-		status = "ok";
-		compatible = "fpc,fpc1020";
-		interrupt-parent = <&tlmm>;
-		interrupts = <23 0x0>;
-		fpc,gpio_rst    = <&tlmm 125 0x0>;
-		fpc,gpio_irq    = <&tlmm 23 0x0>;
-		fp_vdd_vreg-supply = <&L4C>;
-		pinctrl-names = "fpc1020_reset_reset",
-			"fpc1020_reset_active",
-			"fpc1020_irq_active";
-
-		pinctrl-0 = <&msm_gpio_reset>;
-		pinctrl-1 = <&msm_gpio_reset_output_high>;
-		pinctrl-2 = <&msm_gpio_irq>;
-
-	};
-
-/*
-	fingerprint_3P0_VREG: fingerprint_3P0_VREG {
-		compatible = "regulator-fixed";
-		regulator-name = "fingerprint_3P0_VREG";
-		startup-delay-us = <4000>;
-		enable-active-high;
-		gpio = <&tlmm 10 0>;
-		regulator-always-on;
-	};
-*/
 	xiaomi_touch {
 		compatible = "xiaomi-touch";
 		status = "ok";
 		touch,name = "xiaomi-touch";
 	};
-
 };
-
-&L4C {
-	regulator-min-microvolt = <1800000>;
-	regulator-max-microvolt = <1800000>;
-	qcom,init-voltage = <1800000>;
-};
-
-&L10A {
-	regulator-min-microvolt = <3008000>;
-	regulator-max-microvolt = <3008000>;
-	qcom,init-voltage = <3008000>;
-};
-
-&tlmm {
-		/* FP_RESET_N */
-	msm_gpio_reset: msm_gpio_reset {
-		mux {
-			pins = "gpio125";
-			function = "gpio";
-		};
-		config {
-			pins = "gpio125";
-			drive-strength = <2>;
-			bias-disable;
-			output-low;
-		};
-	};
-		/* FP_RESET_N, state device active*/
-	msm_gpio_reset_output_high: msm_gpio_reset_output_high {
-		mux {
-			pins = "gpio125";
-			function = "gpio";
-		};
-		config {
-			pins = "gpio125";
-			drive-strength = <2>;
-			bias-disable;
-			output-high;
-		};
-	};
-		/* FP_INT_N */
-	msm_gpio_irq: msm_gpio_irq {
-		mux {
-			pins = "gpio23";
-			function = "gpio";
-		};
-		config {
-			pins = "gpio23";
-			drive-strength = <2>;
-			bias-pull-down;
-		};
-	};
-};
-
 
 &qupv3_se15_i2c {
 	#address-cells = <1>;
 	#size-cells = <0>;
 	status = "ok";
 
-	bq25970-master@65 {
+	bq25970-master@66 {
 		compatible = "ti,bq2597x-master";
-		reg = <0x65>;
+		reg = <0x66>;
 		interrupt-parent = <&tlmm>;
 		interrupts = <68 0x2002>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&bq2597x_master_int_default>;
-
 		/*ti,bq2597x,bat-ovp-disable;*/
 		ti,bq2597x,bat-ovp-alarm-disable;
 		ti,bq2597x,bat-ocp-disable;
 		ti,bq2597x,bat-ocp-alarm-disable;
 		ti,bq2597x,bat-ucp-alarm-disable;
 		ti,bq2597x,bat-ucp-disable;
-
 		/*ti,bq2597x,bus-ovp-alarm-disable;
 		ti,bq2597x,bus-ocp-disable;
 		ti,bq2597x,bus-ocp-alarm-disable;*/
 		ti,bq2597x,bat-therm-disable;
 		ti,bq2597x,bus-therm-disable;
 		ti,bq2597x,die-therm-disable;
-
 		ti,bq2597x,bat-ovp-threshold = <4550>;
 		ti,bq2597x,bat-ovp-alarm-threshold = <4525>;
 		//ti,bq2597x,bat-ocp-threshold = <8000>;
 		//ti,bq2597x,bat-ocp-alarm-threshold = <7500>;
-
 		ti,bq2597x,bus-ovp-threshold = <12000>;
 		ti,bq2597x,bus-ovp-alarm-threshold = <11000>;
 		ti,bq2597x,bus-ocp-threshold = <3800>;
 		ti,bq2597x,bus-ocp-alarm-threshold = <3500>;
 
 		//ti,bq2597x,bat-ucp-alarm-threshold = <2000>;
-
 		ti,bq2597x,bat-therm-threshold = <0x15>;/*4.1%*/
 		ti,bq2597x,bus-therm-threshold = <0x15>;/*4.1%*/
 		ti,bq2597x,die-therm-threshold = <145>;
-
 		ti,bq2597x,ac-ovp-threshold = <14>;
 		//ti,bq2597x,sense-resistor-mohm = <2>;
 
 		sc8551,ac-ovp-threshold = <14>;
 	};
 
-	bq25970-slave@66 {
-		compatible = "ti,bq2597x-slave";
-		reg = <0x66>;
-		/*
-		interrupt-parent = <&tlmm>;
-		interrupts = <1 2>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&bq2597x_int_default>;
-		*/
 
-		/*ti,bq2597x,bat-ovp-disable;*/
-		ti,bq2597x,bat-ovp-alarm-disable;
-		ti,bq2597x,bat-ocp-disable;
-		ti,bq2597x,bat-ocp-alarm-disable;
-		ti,bq2597x,bat-ucp-alarm-disable;
-
-		ti,bq2597x,bat-ucp-disable;
-
-		/*ti,bq2597x,bus-ovp-alarm-disable;
-		ti,bq2597x,bus-ocp-disable;
-		ti,bq2597x,bus-ocp-alarm-disable;
-		*/
-		ti,bq2597x,bat-therm-disable;
-		ti,bq2597x,bus-therm-disable;
-		ti,bq2597x,die-therm-disable;
-
-		ti,bq2597x,bat-ovp-threshold = <4550>;
-		ti,bq2597x,bat-ovp-alarm-threshold = <4525>;
-		//ti,bq2597x,bat-ocp-threshold = <8000>;
-		//ti,bq2597x,bat-ocp-alarm-threshold = <7500>;
-
-		ti,bq2597x,bus-ovp-threshold = <12000>;
-		ti,bq2597x,bus-ovp-alarm-threshold = <11000>;
-		ti,bq2597x,bus-ocp-threshold = <3500>;
-		ti,bq2597x,bus-ocp-alarm-threshold = <3000>;
-
-		//ti,bq2597x,bat-ucp-alarm-threshold = <2000>;
-
-		ti,bq2597x,bat-therm-threshold = <0x15>;/*4.1%*/
-		ti,bq2597x,bus-therm-threshold = <0x15>;/*4.1%*/
-		ti,bq2597x,die-therm-threshold = <125>;
-
-		ti,bq2597x,ac-ovp-threshold = <14>;
-		//ti,bq2597x,sense-resistor-mohm = <2>;
-
-		sc8551,ac-ovp-threshold = <13>;
-	};
 };
 
 &qupv3_se8_i2c {
@@ -572,34 +448,25 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		pinctrl-names = "idt_active", "idt_suspend";
 		pinctrl-0 = <&idt_int_active &hall_intr3_active &hall_intr4_active &txon_enable_active &power_good_active &reverse_booset_enable_active>;
 		pinctrl-1 = <&idt_int_suspend &hall_intr3_suspend &hall_intr4_suspend &txon_enable_suspend &power_good_suspend &reverse_booset_enable_suspend>;
+		idt,ra9530-enable;
+	};
+};
+
+&qupv3_se17_i2c {
+	status = "ok";
+	ps5169@28 {
+		compatible = "mi,ps5169";
+		reg = <0x28>;
+		mi,ps5169-enable = <&tlmm 69 0x00>;
+		pinctrl-names = "ps5169_active", "ps5169_suspend";
+		pinctrl-0 = <&ps5169_en_active>;
+		pinctrl-1 = <&ps5169_en_sleep>;
 	};
 };
 
 &qupv3_se3_i2c {
 	status = "ok";
 
-        /* Speaker1 */
-	cs35l41@40 {
-		#sound-dai-cells = <1>;
-		compatible = "cirrus,cs35l41";
-		reset-gpios = <&tlmm 50 0>;
-		reg = <0x40>;
-		interrupt-parent = <&tlmm>;
-		interrupts = <27 8>;
-		cirrus,temp-warn_threshold = <3>;
-		cirrus,boost-peak-milliamp = <4000>;
-		cirrus,boost-ind-nanohenry = <1000>;
-		cirrus,boost-cap-microfarad = <15>;
-		cirrus,asp-sdout-hiz = <3>;
-		cirrus,tuning-has-prefix;
-		sound-name-prefix = "TRH";
-		cirrus,fast-switch = "TRH-music.txt", "TRH-voice.txt", "TRH-voip.txt", "TRH-misc.txt";
-		cirrus,gpio-config2 {
-			cirrus,gpio-src-select = <0x4>;
-			cirrus,gpio-output-enable;
-		};
-
-	};
         /* Speaker2 */
 	cs35l41@41 {
 		#sound-dai-cells = <1>;
@@ -614,8 +481,8 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		cirrus,boost-cap-microfarad = <15>;
 		cirrus,asp-sdout-hiz = <3>;
 		cirrus,tuning-has-prefix;
-		sound-name-prefix = "TLH";
-		cirrus,fast-switch = "TLH-music.txt", "TLH-voice.txt", "TLH-voip.txt", "TLH-misc.txt";
+		sound-name-prefix = "TL";
+		cirrus,fast-switch = "TL-music.txt", "TL-voice.txt", "TL-voip.txt", "TL-misc.txt";
 		cirrus,gpio-config2 {
 			cirrus,gpio-src-select = <0x4>;
 			cirrus,gpio-output-enable;
@@ -637,31 +504,8 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		cirrus,asp-sdout-hiz = <3>;
 		cirrus,tuning-has-prefix;
 		//cirrus,right-channel-amp;
-		sound-name-prefix = "TRL";
-		cirrus,fast-switch = "TRL-music.txt", "TRL-voice.txt", "TRL-voip.txt", "TRL-misc.txt";
-		cirrus,gpio-config2 {
-			cirrus,gpio-src-select = <0x4>;
-			cirrus,gpio-output-enable;
-		};
-
-	};
-        /* Speaker4 */
-	cs35l41@42 {
-		#sound-dai-cells = <1>;
-		compatible = "cirrus,cs35l41";
-		reset-gpios = <&tlmm 30 0>;
-		reg = <0x42>;
-		interrupt-parent = <&tlmm>;
-		interrupts = <112 8>;
-		cirrus,temp-warn_threshold = <3>;
-		cirrus,boost-peak-milliamp = <4000>;
-		cirrus,boost-ind-nanohenry = <1000>;
-		cirrus,boost-cap-microfarad = <15>;
-		cirrus,right-channel-amp;
-		cirrus,asp-sdout-hiz = <3>;
-		cirrus,tuning-has-prefix;
-		sound-name-prefix = "TLL";
-		cirrus,fast-switch = "TLL-music.txt", "TLL-voice.txt", "TLL-voip.txt", "TLL-misc.txt";
+		sound-name-prefix = "TR";
+		cirrus,fast-switch = "TR-music.txt", "TR-voice.txt", "TR-voip.txt", "TR-misc.txt";
 		cirrus,gpio-config2 {
 			cirrus,gpio-src-select = <0x4>;
 			cirrus,gpio-output-enable;
@@ -692,8 +536,8 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		cirrus,asp-sdout-hiz = <3>;
 		//cirrus,right-channel-amp;
 		cirrus,tuning-has-prefix;
-		sound-name-prefix = "BRH";
-		cirrus,fast-switch = "BRH-music.txt", "BRH-voice.txt", "BRH-voip.txt", "BRH-misc.txt";
+		sound-name-prefix = "BR";
+		cirrus,fast-switch = "BR-music.txt", "BR-voice.txt", "BR-voip.txt", "BR-misc.txt";
 		cirrus,gpio-config2 {
 			cirrus,gpio-src-select = <0x4>;
 			cirrus,gpio-output-enable;
@@ -715,53 +559,8 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		cirrus,right-channel-amp;
 		cirrus,asp-sdout-hiz = <3>;
 		cirrus,tuning-has-prefix;
-		sound-name-prefix = "BLH";
-		cirrus,fast-switch = "BLH-music.txt", "BLH-voice.txt", "BLH-voip.txt", "BLH-misc.txt";
-		cirrus,gpio-config2 {
-			cirrus,gpio-src-select = <0x4>;
-			cirrus,gpio-output-enable;
-		};
-
-	};
-        /* Speaker7 */
-	cs35l41@43 {
-		#sound-dai-cells = <1>;
-		compatible = "cirrus,cs35l41";
-		reset-gpios = <&tlmm 49 0>;
-		reg = <0x43>;
-		interrupt-parent = <&tlmm>;
-		interrupts = <126 8>;
-		cirrus,temp-warn_threshold = <3>;
-		cirrus,boost-peak-milliamp = <4000>;
-		cirrus,boost-ind-nanohenry = <1000>;
-		cirrus,boost-cap-microfarad = <15>;
-		cirrus,asp-sdout-hiz = <3>;
-		//cirrus,right-channel-amp;
-		cirrus,tuning-has-prefix;
-		sound-name-prefix = "BLL";
-		cirrus,fast-switch = "BLL-music.txt", "BLL-voice.txt", "BLL-voip.txt", "BLL-misc.txt";
-		cirrus,gpio-config2 {
-			cirrus,gpio-src-select = <0x4>;
-			cirrus,gpio-output-enable;
-		};
-
-	};
-        /* Speaker8 */
-	cs35l41@42 {
-		#sound-dai-cells = <1>;
-		compatible = "cirrus,cs35l41";
-		reset-gpios = <&tlmm 69 0>;
-		reg = <0x42>;
-		interrupt-parent = <&tlmm>;
-		interrupts = <100 8>;
-		cirrus,temp-warn_threshold = <3>;
-		cirrus,boost-peak-milliamp = <4000>;
-		cirrus,boost-ind-nanohenry = <1000>;
-		cirrus,boost-cap-microfarad = <15>;
-		cirrus,asp-sdout-hiz = <3>;
-		cirrus,tuning-has-prefix;
-		sound-name-prefix = "BRL";
-		cirrus,fast-switch = "BRL-music.txt", "BRL-voice.txt", "BRL-voip.txt", "BRL-misc.txt";
+		sound-name-prefix = "BL";
+		cirrus,fast-switch = "BL-music.txt", "BL-voice.txt", "BL-voip.txt", "BL-misc.txt";
 		cirrus,gpio-config2 {
 			cirrus,gpio-src-select = <0x4>;
 			cirrus,gpio-output-enable;
@@ -770,6 +569,7 @@ And public attribution of xiaomi platforms(like enuma and so and)
 	};
 
 };
+
 &qupv3_se11_i2c {
 	status = "ok";
 	aw8697_haptic@5A {
@@ -787,7 +587,7 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		compatible = "ti,bq27z561_slave";
 		reg = <0x55>;
 		bq,ignore-digest-debug;
-		bq,charge-full-design = <4300000>;
+		bq,charge-full-design = <5000000>;
 		bq,recharge-voltage   = <4380>;
 		//bq,shutdown-delay-enable;
 		bq,soc_decimal_rate = <
@@ -814,7 +614,7 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		compatible = "ti,bq27z561_master";
 		reg = <0x55>;
 		bq,ignore-digest-debug;
-		bq,charge-full-design = <4300000>;
+		bq,charge-full-design = <5000000>;
 		bq,recharge-voltage   = <4380>;
 		//bq,shutdown-delay-enable;
 		bq,force-soc-enable;
@@ -834,6 +634,53 @@ And public attribution of xiaomi platforms(like enuma and so and)
 			1      0  100 1700
 			2  (-300)   0 1000 >;
 	};
+
+};
+
+&qupv3_se16_i2c {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "ok";
+	bq25970-slave@66 {
+		compatible = "ti,bq2597x-slave";
+		reg = <0x66>;
+		/*
+		interrupt-parent = <&tlmm>;
+		interrupts = <1 2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&bq2597x_int_default>;
+		*/
+		/*ti,bq2597x,bat-ovp-disable;*/
+		ti,bq2597x,bat-ovp-alarm-disable;
+		ti,bq2597x,bat-ocp-disable;
+		ti,bq2597x,bat-ocp-alarm-disable;
+		ti,bq2597x,bat-ucp-alarm-disable;
+		ti,bq2597x,bat-ucp-disable;
+		/*ti,bq2597x,bus-ovp-alarm-disable;
+		ti,bq2597x,bus-ocp-disable;
+		ti,bq2597x,bus-ocp-alarm-disable;
+		*/
+		ti,bq2597x,bat-therm-disable;
+		ti,bq2597x,bus-therm-disable;
+		ti,bq2597x,die-therm-disable;
+		ti,bq2597x,bat-ovp-threshold = <4550>;
+		ti,bq2597x,bat-ovp-alarm-threshold = <4525>;
+		//ti,bq2597x,bat-ocp-threshold = <8000>;
+		//ti,bq2597x,bat-ocp-alarm-threshold = <7500>;
+		ti,bq2597x,bus-ovp-threshold = <12000>;
+		ti,bq2597x,bus-ovp-alarm-threshold = <11000>;
+		ti,bq2597x,bus-ocp-threshold = <3500>;
+		ti,bq2597x,bus-ocp-alarm-threshold = <3000>;
+		//ti,bq2597x,bat-ucp-alarm-threshold = <2000>;
+		ti,bq2597x,bat-therm-threshold = <0x15>;/*4.1%*/
+		ti,bq2597x,bus-therm-threshold = <0x15>;/*4.1%*/
+		ti,bq2597x,die-therm-threshold = <125>;
+		ti,bq2597x,ac-ovp-threshold = <14>;
+		//ti,bq2597x,sense-resistor-mohm = <2>;
+
+		sc8551,ac-ovp-threshold = <13>;
+	};
+
 };
 
 &pm8150b_charger {
@@ -846,14 +693,14 @@ And public attribution of xiaomi platforms(like enuma and so and)
 	qcom,dc-icl-ua = <1000000>;
 	qcom,auto-recharge-vbat-mv = <4400000>;
 	qcom,chg-term-src = <1>;
-	qcom,chg-term-current-ma = <(-180)>;
+	qcom,chg-term-current-ma = <(-230)>;
 	qcom,step-charging-enable;
 	qcom,sw-jeita-enable;
 	qcom,chg-warm-th= <480>;
 	qcom,chg-cool-th= <150>;
 	//qcom,suspend-input-on-debug-batt;
 	qcom,usbpd-phandle = <&pm8150b_pdphy>;
-	qcom,battery-data = <&enuma_batterydata>;
+	qcom,battery-data = <&dagu_batterydata>;
 	//mi,fcc-batt-unverify-ua = <2000000>;
 	mi,support-ffc;
 	qcom,lpd-disable;
@@ -866,6 +713,7 @@ And public attribution of xiaomi platforms(like enuma and so and)
 	qcom,disable-suspend-on-collapse;
 	qcom,distinguish-qc-class-ab;
 	qcom,support-conn-therm;
+	qcom,support-ext-5v-boost;
 	vbus-disable-gpio = <&tlmm 74 GPIO_ACTIVE_HIGH>;
 	pinctrl-names = "default", "vbus_disable_active", "vbus_disable_suspend";
 	pinctrl-0 = <&vbus_disable_suspend>;
@@ -953,11 +801,9 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		mi,pd-battery-warm-th = <480>;
 		mi,cp-sec-enable;
 		mi,therm-level-threshold = <12>;
-		mi,step-charge-high-vol-curr-max = <6720>;
+		mi,step-charge-high-vol-curr-max = <7840>;
 		mi,cell-vol-high-threshold-mv = <4450>;
 		mi,cell-vol-max-threshold-mv = <4487>;
-		//mi,cell-vol-high-threshold-mv = <4448>;
-		//mi,cell-vol-max-threshold-mv = <4477>;
 		mi,chg-enable-k81;
 		mi,pd-power-max = <67>; /*charge power max : 67W */
 	};
@@ -981,15 +827,22 @@ And public attribution of xiaomi platforms(like enuma and so and)
 			95 10 >;
 		fg-master-disable-gpio = <&tlmm 117 GPIO_ACTIVE_HIGH>;
 		fg-slave-disable-gpio = <&tlmm 91 GPIO_ACTIVE_HIGH>;
+
 	};
 
-	enuma_batterydata: qcom,battery-data {
+	dagu_batterydata: qcom,battery-data {
 		qcom,batt-id-range-pct = <15>;
-		#include "jeita-step-cfg-k81.dtsi"
+		#include "jeita-step-cfg-dagu.dtsi"
 	};
-
+/*	bcm4775 {
+		compatible = "bcm4775";
+		pinctrl-names = "default","gps_enable_active", "gps_enable_suspend";
+		gps-ldo = <&tlmm 46 GPIO_ACTIVE_LOW>;
+		pinctrl-0 = <&gps_clk_default>;
+                pinctrl-1 = <&gps_enable_active>;
+                pinctrl-2 = <&gps_enable_suspend>;
+	};*/
 };
-
 
 &pm8150b_pdphy {
 	mi,non-qcom-pps-ctrl;
@@ -1007,11 +860,11 @@ And public attribution of xiaomi platforms(like enuma and so and)
 &usb2_phy0 {
 	qcom,param-override-seq =
 		<0x67 0x6C
-		 0x28 0x70
+		 0xCF 0x70
 		 0x73 0x74>;
 	qcom,global-param-override-seq =
 		<0xFB 0x6C
-		 0x28 0x70
+		 0xCF 0x70
 		 0x73 0x74>;
 };
 
@@ -1034,9 +887,9 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		qcom,pre-scaling = <1 3>;
 	};
 
-	wireless_therm {
+	sc8551a_therm@4d {
 		reg = <ADC_AMUX_THM1_PU2>;
-		label = "wireless_therm";
+		label = "sc8551a_therm";
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 		qcom,pre-scaling = <1 1>;
@@ -1045,6 +898,13 @@ And public attribution of xiaomi platforms(like enuma and so and)
 	conn_therm@4f {
 		reg = <ADC_AMUX_THM3_PU2>;
 		label = "conn_therm";
+		qcom,ratiometric;
+		qcom,hw-settle-time = <200>;
+		qcom,pre-scaling = <1 1>;
+	};
+	batt_therm@4a {
+		reg = <ADC_BAT_THERM_PU2>;
+		label = "batt_therm";
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 		qcom,pre-scaling = <1 1>;
@@ -1091,13 +951,13 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		qcom,pre-scaling = <1 3>;
 	};
 
-	xo_therm@4c {
+	/*xo_therm@4c {
 		reg = <ADC_XO_THERM_PU2>;
 		label = "xo_therm";
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 		qcom,pre-scaling = <1 1>;
-	};
+	};*/
 
 	skin_therm@4d {
 		reg = <ADC_AMUX_THM1_PU2>;
@@ -1107,9 +967,9 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		qcom,pre-scaling = <1 1>;
 	};
 
-	pa_therm1@4e {
+	quiet_therm@4e {
 		reg = <ADC_AMUX_THM2_PU2>;
-		label = "pa_therm1";
+		label = "quiet_therm";
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 		qcom,pre-scaling = <1 1>;
@@ -1127,7 +987,7 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		qcom,pre-scaling = <1 3>;
 	};
 
-	camera_flash_therm@4d {
+	wifi_therm@4d {
 		reg = <ADC_AMUX_THM1_PU2>;
 		label = "camera_flash_therm";
 		qcom,ratiometric;
@@ -1135,15 +995,8 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		qcom,pre-scaling = <1 1>;
 	};
 
-	skin_msm_therm@4e {
-		reg = <ADC_AMUX_THM2_PU2>;
-		label = "skin_msm_therm";
-		qcom,ratiometric;
-		qcom,hw-settle-time = <200>;
-		qcom,pre-scaling = <1 1>;
-	};
 
-	pa_therm2@4f {
+	lcd_therm@4f {
 		reg = <ADC_AMUX_THM3_PU2>;
 		label = "pa_therm2";
 		qcom,ratiometric;
@@ -1151,7 +1004,7 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		qcom,pre-scaling = <1 1>;
 	};
 
-	wifi_therm@52 {
+	camera_flash_therm@52 {
 		reg = <ADC_GPIO1_PU2>;
 		label = "wifi_therm";
 		qcom,ratiometric;
@@ -1165,9 +1018,10 @@ And public attribution of xiaomi platforms(like enuma and so and)
 	#size-cells = <0>;
 
 	io-channels = <&pm8150b_vadc ADC_AMUX_THM1_PU2>,
-			<&pm8150b_vadc ADC_AMUX_THM3_PU2>;
+			<&pm8150b_vadc ADC_AMUX_THM3_PU2>,
+			<&pm8150b_vadc ADC_BAT_THERM_PU2>;
 
-	wireless_therm@4d {
+	sc8551a_therm@4d {
 		reg = <ADC_AMUX_THM1_PU2>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
@@ -1175,6 +1029,11 @@ And public attribution of xiaomi platforms(like enuma and so and)
 
 	conn_therm@4f {
 		reg = <ADC_AMUX_THM3_PU2>;
+		qcom,ratiometric;
+		qcom,hw-settle-time = <200>;
+	};
+	batt_therm@4a {
+		reg = <ADC_BAT_THERM_PU2>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 	};
@@ -1199,7 +1058,7 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		qcom,hw-settle-time = <200>;
 	};
 
-	pa_therm1@4e {
+	quiet_therm@4e {
 		reg = <ADC_AMUX_THM2_PU2>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
@@ -1211,29 +1070,29 @@ And public attribution of xiaomi platforms(like enuma and so and)
 	#size-cells = <0>;
 
 	io-channels = <&pm8150l_vadc ADC_AMUX_THM1_PU2>,
-			<&pm8150l_vadc ADC_AMUX_THM2_PU2>,
+			//<&pm8150l_vadc ADC_AMUX_THM2_PU2>,
 			<&pm8150l_vadc ADC_AMUX_THM3_PU2>,
 			<&pm8150l_vadc ADC_GPIO1_PU2>;
 
-	camera_flash_therm@4d {
+	wifi_therm@4d {
 		reg = <ADC_AMUX_THM1_PU2>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 	};
 
-	skin_msm_therm@4e {
+	/*skin_msm_therm@4e {
 		reg = <ADC_AMUX_THM2_PU2>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
-	};
+	};*/
 
-	pa_therm2@4f {
+	lcd_therm@4f {
 		reg = <ADC_AMUX_THM3_PU2>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
 	};
 
-	wifi_therm@52 {
+	camera_flash_therm@52 {
 		reg = <ADC_GPIO1_PU2>;
 		qcom,ratiometric;
 		qcom,hw-settle-time = <200>;
@@ -1260,6 +1119,20 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		polling-delay = <0>;
 		thermal-governor = "user_space";
 		thermal-sensors = <&pm8150b_adc_tm ADC_AMUX_THM3_PU2>;
+		wake-capable-sensor;
+		trips {
+			active-config0 {
+				temperature = <125000>;
+				hysteresis = <1000>;
+				type = "passive";
+			};
+		};
+	};
+	batt_therm {
+		polling-delay-passive = <0>;
+		polling-delay = <0>;
+		thermal-governor = "user_space";
+		thermal-sensors = <&pm8150b_adc_tm ADC_BAT_THERM_PU2>;
 		wake-capable-sensor;
 		trips {
 			active-config0 {
@@ -1300,26 +1173,11 @@ And public attribution of xiaomi platforms(like enuma and so and)
 		};
 	};
 
-	pa_therm1 {//place close to pa1
+	wifi_therm {
 		polling-delay-passive = <0>;
 		polling-delay = <0>;
 		thermal-governor = "user_space";
 		thermal-sensors = <&pm8150l_adc_tm ADC_AMUX_THM1_PU2>;
-		wake-capable-sensor;
-		trips {
-			active-config0 {
-				temperature = <125000>;
-				hysteresis = <1000>;
-				type = "passive";
-			};
-		};
-	};
-
-	pa_therm0 {//place close to pa0
-		polling-delay-passive = <0>;
-		polling-delay = <0>;
-		thermal-governor = "user_space";
-		thermal-sensors = <&pm8150l_adc_tm ADC_AMUX_THM2_PU2>;
 		wake-capable-sensor;
 		trips {
 			active-config0 {
@@ -1364,9 +1222,14 @@ And public attribution of xiaomi platforms(like enuma and so and)
 &wlan {
        vdd-wlan-dig-supply = <&pm8150_s6>;
        qcom,vdd-wlan-dig-config = <950000 950000 0 0 1>;
+       vdd-wlan-rfa1-supply = <&pm8150_s5>;
+       qcom,vdd-wlan-rfa1-config = <2000000 2000000 0 0 1>;
 };
 
 &bluetooth {
         qca,bt-vdd-dig-supply = <&pm8150_s6>;
         qca,bt-vdd-dig-voltage-level = <950000 950000>;
+        qca,bt-vdd-rfa1-supply = <&pm8150_s5>;
+        qca,bt-vdd-rfa1-voltage-level = <2000000 2000000>;
 };
+
