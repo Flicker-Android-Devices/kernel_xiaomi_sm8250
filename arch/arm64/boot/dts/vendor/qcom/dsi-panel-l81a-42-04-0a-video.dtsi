@@ -42,7 +42,7 @@
         mi,mdss-dsi-panel-max-brightness-clone = <4095>;
         qcom,mdss-dsi-dma-trigger = "trigger_sw";
         qcom,mdss-dsi-mdp-trigger = "none";
-        qcom,mdss-dsi-reset-sequence = <0 55>, <1 55>, <0 55>, <1 55>;
+        qcom,mdss-dsi-reset-sequence = <0 1>, <1 1>, <0 1>, <1 55>;
         qcom,adjust-timer-wakeup-ms = <1>;
         qcom,mdss-pan-physical-width-dimension = <1662>;
         qcom,mdss-pan-physical-height-dimension = <2660>;
@@ -112,7 +112,7 @@
                         39 01 00 00 00 00 02 35 00
                         39 01 00 00 00 00 03 51 0F FF
                         39 01 00 00 00 00 02 53 24
-                        39 01 00 00 78 00 01 11
+                        39 01 00 00 3E 00 01 11
                         39 01 00 00 14 00 01 29
                         ];
                 qcom,mdss-dsi-off-command = [
