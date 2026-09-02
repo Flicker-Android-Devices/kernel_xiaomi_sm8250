@@ -97,6 +97,55 @@ And public attribution of xiaomi platforms(like elish and so and)
 	enn-supply = <&display_panel_enn>;
 };
 
+&dsi_panel_pwr_supply_k81_vddio {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	qcom,panel-supply-entry@0 {
+		reg = <0>;
+		qcom,supply-name = "vddio";
+		qcom,supply-min-voltage = <1880000>;
+		qcom,supply-max-voltage = <1880000>;
+		qcom,supply-enable-load = <62000>;
+		qcom,supply-disable-load = <80>;
+		qcom,supply-post-on-sleep = <10>;
+		qcom,supply-post-off-sleep = <10>;
+	};
+
+	qcom,panel-supply-entry@1 {
+		reg = <1>;
+		qcom,supply-name = "enp";
+		qcom,supply-min-voltage = <5500000>;
+		qcom,supply-max-voltage = <5500000>;
+		qcom,supply-enable-load = <100000>;
+		qcom,supply-disable-load = <100>;
+		qcom,supply-pre-on-sleep = <0>;
+		qcom,supply-pre-off-sleep = <0>;
+		qcom,supply-post-on-sleep = <10>;
+		qcom,supply-post-off-sleep = <10>;
+	};
+
+	qcom,panel-supply-entry@2 {
+		reg = <2>;
+		qcom,supply-name = "enn";
+		qcom,supply-min-voltage = <5500000>;
+		qcom,supply-max-voltage = <5500000>;
+		qcom,supply-enable-load = <100000>;
+		qcom,supply-disable-load = <100>;
+		qcom,supply-pre-on-sleep = <0>;
+		qcom,supply-pre-off-sleep = <0>;
+		qcom,supply-post-on-sleep = <10>;
+		qcom,supply-post-off-sleep = <10>;
+	};
+};
+
+&dsi_k81_42_02_0a_dual_cphy_video {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_k81_vddio>;
+};
+
+&dsi_k81_35_02_0b_dual_cphy_video {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_k81_vddio>;
+};
+
 &ts_active {
 	mux {
 		pins = "gpio33", "gpio39";
@@ -248,16 +297,22 @@ And public attribution of xiaomi platforms(like elish and so and)
 			novatek,display-maker = <0x42>;
 			novatek,fw-name = "novatek_nt36523_k81a_fw01.bin";
 			novatek,mp-name = "novatek_nt36523_k81a_mp01.bin";
+			novatek,fw-pen-name = "novatek_nt36523_k81a_fw01_pen.bin";
+			novatek,mp-pen-name = "novatek_nt36523_k81a_mp01_pen.bin";
 		};
 		novatek,cfg_1 {
 			novatek,display-maker = <0x08>;
 			novatek,fw-name = "novatek_nt36523_k81a_fw02.bin";
 			novatek,mp-name = "novatek_nt36523_k81a_mp02.bin";
+			novatek,fw-pen-name = "novatek_nt36523_k81a_fw02_pen.bin";
+			novatek,mp-pen-name = "novatek_nt36523_k81a_mp02_pen.bin";
 		};
 		novatek,cfg_2 {
 			novatek,display-maker = <0x35>;
 			novatek,fw-name = "novatek_nt36523_k81a_fw02.bin";
 			novatek,mp-name = "novatek_nt36523_k81a_mp02.bin";
+			novatek,fw-pen-name = "novatek_nt36523_k81a_fw02_pen.bin";
+			novatek,mp-pen-name = "novatek_nt36523_k81a_mp02_pen.bin";
 		};
 	};
 };
@@ -272,6 +327,7 @@ And public attribution of xiaomi platforms(like elish and so and)
 		ktz8866,hwen-gpio = <&tlmm 139 0x00>;
 		ktz8866,enp-gpio = <&tlmm 130 0x00>;
 		ktz8866,enn-gpio = <&tlmm 131 0x00>;
+		ktz8866,panelid-gpio = <&tlmm 38 0x00>;
 	};
 };
 
@@ -334,7 +390,11 @@ And public attribution of xiaomi platforms(like elish and so and)
 };
 
 
-
+&sde_dsi {
+	/delete-property/ vdd-supply;
+	/delete-property/ avdd-supply;
+	qcom,dsi-default-panel = <&dsi_k81_42_02_0a_dual_cphy_video>;
+};
 
 &pm8150a_l11 {
 	qcom,init-voltage = <3000000>;
