@@ -146,7 +146,7 @@ And public attribution of xiaomi platforms(like dagu and so and)
 		qcom,supply-max-voltage = <1832000>;
 		qcom,supply-enable-load = <62000>;
 		qcom,supply-disable-load = <80>;
-		qcom,supply-post-on-sleep = <10>;
+		qcom,supply-post-on-sleep = <2>;
 		qcom,supply-post-off-sleep = <10>;
 	};
 
@@ -159,7 +159,7 @@ And public attribution of xiaomi platforms(like dagu and so and)
 		qcom,supply-disable-load = <100>;
 		qcom,supply-pre-on-sleep = <0>;
 		qcom,supply-pre-off-sleep = <0>;
-		qcom,supply-post-on-sleep = <10>;
+		qcom,supply-post-on-sleep = <2>;
 		qcom,supply-post-off-sleep = <10>;
 	};
 
@@ -172,7 +172,7 @@ And public attribution of xiaomi platforms(like dagu and so and)
 		qcom,supply-disable-load = <100>;
 		qcom,supply-pre-on-sleep = <0>;
 		qcom,supply-pre-off-sleep = <0>;
-		qcom,supply-post-on-sleep = <10>;
+		qcom,supply-post-on-sleep = <0>;
 		qcom,supply-post-off-sleep = <10>;
 	};
 };
@@ -352,6 +352,11 @@ And public attribution of xiaomi platforms(like dagu and so and)
 };
 
 
+&sde_dsi {
+	/delete-property/ vdd-supply;
+	/delete-property/ avdd-supply;
+	qcom,dsi-default-panel = <&dsi_k81_42_02_0a_dual_cphy_video>;
+};
 
 &pm8150a_l11 {
 	qcom,init-voltage = <3000000>;
@@ -417,7 +422,7 @@ And public attribution of xiaomi platforms(like dagu and so and)
 		//ti,bq2597x,bat-ocp-alarm-threshold = <7500>;
 		ti,bq2597x,bus-ovp-threshold = <12000>;
 		ti,bq2597x,bus-ovp-alarm-threshold = <11000>;
-		ti,bq2597x,bus-ocp-threshold = <3800>;
+		ti,bq2597x,bus-ocp-threshold = <4250>;
 		ti,bq2597x,bus-ocp-alarm-threshold = <3500>;
 
 		//ti,bq2597x,bat-ucp-alarm-threshold = <2000>;
@@ -669,8 +674,8 @@ And public attribution of xiaomi platforms(like dagu and so and)
 		//ti,bq2597x,bat-ocp-alarm-threshold = <7500>;
 		ti,bq2597x,bus-ovp-threshold = <12000>;
 		ti,bq2597x,bus-ovp-alarm-threshold = <11000>;
-		ti,bq2597x,bus-ocp-threshold = <3500>;
-		ti,bq2597x,bus-ocp-alarm-threshold = <3000>;
+		ti,bq2597x,bus-ocp-threshold = <4250>;
+		ti,bq2597x,bus-ocp-alarm-threshold = <3500>;
 		//ti,bq2597x,bat-ucp-alarm-threshold = <2000>;
 		ti,bq2597x,bat-therm-threshold = <0x15>;/*4.1%*/
 		ti,bq2597x,bus-therm-threshold = <0x15>;/*4.1%*/
