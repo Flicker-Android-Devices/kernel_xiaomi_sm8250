@@ -1448,7 +1448,7 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 				rc = cam_sensor_i2c_command_parser(
 					&o_ctrl->io_master_info,
 					i2c_reg_settings,
-					&cmd_desc[i], 1);
+					&cmd_desc[i], 1, NULL);
 				if (rc < 0) {
 					CAM_ERR(CAM_OIS,
 						"post init settings parsing failed: %d", rc);
