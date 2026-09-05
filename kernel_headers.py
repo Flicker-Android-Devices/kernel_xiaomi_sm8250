@@ -530,6 +530,9 @@ def gen_blueprints(
 
   # Excluded sources, architecture specific.
   exclude_srcs = []
+  techpack_exclude_srcs = [
+      'techpack/camera-bengal/include/uapi/*/**/*.h',
+  ]
 
   if header_arch == "arm":
     exclude_srcs = ['linux/a.out.h']
@@ -551,7 +554,11 @@ def gen_blueprints(
   error_count += find_out(
       verbose, module_dir, arch_prefix, rel_glob, None, arch_out)
 
-  techpack_out = [x.split('include/uapi/')[1] for x in techpack_include_uapi]
+  filtered_techpack_uapi = [
+      x for x in techpack_include_uapi
+      if not any(p.split('/*')[0] in x for p in techpack_exclude_srcs)
+  ]
+  techpack_out = list(dict.fromkeys([x.split('include/uapi/')[1] for x in filtered_techpack_uapi]))
 
   if error_count != 0:
     return error_count
@@ -579,10 +586,12 @@ def gen_blueprints(
     f.write(']\n')
     f.write('\n')
 
-    if exclude_srcs:
+    if exclude_srcs or techpack_exclude_srcs:
       f.write('gen_headers_exclude_srcs_%s = [\n' % header_arch)
       for h in exclude_srcs:
         f.write('    "%s",\n' % os.path.join(generic_prefix, h))
+      for h in techpack_exclude_srcs:
+        f.write('    "%s",\n' % h)
       f.write(']\n')
       f.write('\n')
 
@@ -708,7 +717,7 @@ def gen_blueprints(
 
 def parse_bp_for_headers(file_name, headers):
   parsing_headers = False
-  pattern = re.compile("gen_headers_out_[a-zA-Z0-9]+\s*=\s*\[\s*")
+  pattern = re.compile(r"gen_headers_out_[a-zA-Z0-9]+\s*=\s*\[\s*")
   with open(file_name, 'r') as f:
     for line in f:
       line = line.strip()
