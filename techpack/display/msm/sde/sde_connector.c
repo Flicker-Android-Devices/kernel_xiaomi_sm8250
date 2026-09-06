@@ -815,7 +815,7 @@ void sde_connector_update_fod_hbm(struct drm_connector *connector)
 		return;
 
 	cstate = to_sde_crtc_state(c_conn->encoder->crtc->state);
-	status = cstate->fod_dim_layer != NULL;
+	status = cstate->has_fod_layer;
 	if (atomic_xchg(&effective_status, status) == status)
 		return;
 
