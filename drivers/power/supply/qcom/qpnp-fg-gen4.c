@@ -7043,7 +7043,7 @@ struct LowSoc_HighVolt_Smooth{
 	int time;
 };
 
-struct LowSoc_HighVolt_Smooth lowsoc_highvolt_smooth[SMOOTH_VOLT_LEN] = {
+static struct LowSoc_HighVolt_Smooth lowsoc_highvolt_smooth[SMOOTH_VOLT_LEN] = {
 	{0,    10},
 	{3400, 30},
 	{3500, 45},
