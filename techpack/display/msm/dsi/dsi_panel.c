@@ -18,6 +18,7 @@
 #include "dsi_mi_feature.h"
 #include "dsi_display.h"
 #include "xiaomi_frame_stat.h"
+#include "mi_disp_lhbm.h"
 
 /**
  * topology is currently defined by a set of following 3 values:
@@ -929,7 +930,12 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 	int rc = 0;
 
 	if (status) {
-		dsi_panel_set_disp_param(panel, DISPPARAM_HBM_FOD_ON);
+		u32 param = DISPPARAM_HBM_FOD_ON;
+
+		if (panel->mi_cfg.local_hbm_enabled)
+			param |= LOCAL_LHBM_TARGET_BRIGHTNESS_WHITE_1000NIT;
+
+		dsi_panel_set_disp_param(panel, param);
 	} else {
 		dsi_panel_set_disp_param(panel, DISPPARAM_HBM_FOD_OFF);
 	}
