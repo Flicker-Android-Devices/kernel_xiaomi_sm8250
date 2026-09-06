@@ -4165,6 +4165,9 @@ int dsi_panel_set_disp_param(struct dsi_panel *panel, u32 param)
 	case DISPPARAM_HBM_FOD_ON:
 		if (mi_cfg->local_hbm_enabled) {
 			cancel_delayed_work(&mi_cfg->enter_aod_delayed_work);
+			if (fod_lhbm_level == 0)
+				fod_lhbm_level = LOCAL_LHBM_TARGET_BRIGHTNESS_WHITE_1000NIT;
+
 			if (fod_lhbm_level == 1) {
 				pr_info("lhbm white 1000nit On\n");
 				mi_dsi_update_lhbm_cmd_87reg(panel, DSI_CMD_SET_MI_FOD_LHBM_WHITE_1000NIT, mi_cfg->last_bl_level);
