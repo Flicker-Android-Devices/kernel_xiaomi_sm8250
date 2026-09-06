@@ -3896,6 +3896,7 @@ static struct drm_crtc_state *sde_crtc_duplicate_state(struct drm_crtc *crtc)
 
 	/* clear destination scaler dirty bit */
 	cstate->ds_dirty = false;
+	cstate->has_fod_layer = old_cstate->has_fod_layer;
 
 	/* duplicate base helper */
 	__drm_atomic_helper_crtc_duplicate_state(crtc, &cstate->base);
@@ -4611,9 +4612,15 @@ static struct sde_hw_dim_layer* sde_crtc_setup_fod_dim_layer(
 		goto error;
 	}
 
+	if (display->panel->mi_cfg.local_hbm_enabled)
+		return NULL;
+
 	mutex_lock(&display->panel->panel_lock);
 	alpha = dsi_panel_get_fod_dim_alpha(display->panel);
 	mutex_unlock(&display->panel->panel_lock);
+
+	if (!alpha)
+		return NULL;
 
 	dim_layer = &cstate->dim_layer[cstate->num_dim_layers];
 	dim_layer->flags = SDE_DRM_DIM_LAYER_INCLUSIVE;
@@ -4639,13 +4646,16 @@ static void sde_crtc_fod_atomic_check(struct sde_crtc_state *cstate,
 		if (sde_plane_is_fod_layer(pstates[plane_idx].drm_pstate))
 			break;
 
-	if (plane_idx == cnt) {
+	cstate->has_fod_layer = (plane_idx < cnt);
+
+	if (!cstate->has_fod_layer) {
 		cstate->fod_dim_layer = NULL;
-	} else {
-		dim_layer_stage = pstates[plane_idx].stage;
-		cstate->fod_dim_layer = sde_crtc_setup_fod_dim_layer(cstate,
-				dim_layer_stage);
+		return;
 	}
+
+	dim_layer_stage = pstates[plane_idx].stage;
+	cstate->fod_dim_layer = sde_crtc_setup_fod_dim_layer(cstate,
+			dim_layer_stage);
 
 	if (!cstate->fod_dim_layer)
 		return;
