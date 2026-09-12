@@ -414,11 +414,11 @@ enum {
 
 #define RICHTAP_MMAP_BUF_SIZE 1000
 #define RICHTAP_MMAP_PAGE_ORDER 2
-#define RICHTAP_MMAP_BUF_SUM 16
+#define RICHTAP_MMAP_BUF_SUM 4
 
 #pragma pack(4)
 struct mmap_buf_format {
-	uint8_t status;
+	volatile uint8_t status;
 	uint8_t bit;
 	int16_t length;
 	uint32_t reserve;
