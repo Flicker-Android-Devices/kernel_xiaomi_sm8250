@@ -75,6 +75,24 @@ static int dev_cnt = 0;
 #endif
 
 struct pm_qos_request pm_qos_req_vb;
+#ifdef AAC_RICHTAP
+static DEFINE_MUTEX(qos_lock);
+
+static void aw8697_pm_qos_enable(bool enabled)
+{
+	mutex_lock(&qos_lock);
+	if (enabled) {
+		if (!pm_qos_request_active(&pm_qos_req_vb))
+			pm_qos_add_request(&pm_qos_req_vb,
+					   PM_QOS_CPU_DMA_LATENCY,
+					   PM_QOS_VALUE_VB);
+	} else {
+		if (pm_qos_request_active(&pm_qos_req_vb))
+			pm_qos_remove_request(&pm_qos_req_vb);
+	}
+	mutex_unlock(&qos_lock);
+}
+#endif
 /******************************************************
  *
  * variable
@@ -3459,55 +3477,70 @@ static void rtp_work_proc(struct work_struct *work)
 	struct aw8697 *aw8697 =
 		container_of(work, struct aw8697, haptic_rtp_work);
 	struct mmap_buf_format *opbuf = aw8697->start_buf;
-	uint32_t count = 100;
-	uint8_t reg_val = 0x10;
+	bool started = false;
+	uint8_t reg_val = 0;
 	ktime_t t_start;
 	s64 elapsed_us;
 	unsigned char reg_rtp_data = (aw8697->chip_version == AW8697_CHIP_9X) ?
 				     AW8697_REG_RTP_DATA : AW869XX_REG_RTPDATA;
-
-	opbuf = aw8697->start_buf;
-	count = 100;
-	while (count--) {
-		if (opbuf->status == MMAP_BUF_DATA_VALID) {
-			mutex_lock(&aw8697->lock);
-			aw8697_haptic_play_mode(aw8697, AW8697_HAPTIC_RTP_MODE);
-			aw8697_haptic_set_rtp_aei(aw8697, true);
-			aw8697_interrupt_clear(aw8697);
-			aw8697_haptic_start(aw8697);
-			mutex_unlock(&aw8697->lock);
-			break;
-		} else {
-			msleep(1);
-		}
-	}
+	unsigned char reg_sysst = (aw8697->chip_version == AW8697_CHIP_9X) ?
+				  AW8697_REG_SYSST : AW869XX_REG_SYSST;
 
 	t_start = ktime_get();
-	reg_val = 0x10;
-	while (true) {
+	while (!aw8697->done_flag) {
 		elapsed_us = ktime_us_delta(ktime_get(), t_start);
-		if (elapsed_us > 800000) {
-			pr_info("Failed ! %s endless loop\n", __func__);
+		if (elapsed_us > 1500000) {
+			pr_info("%s: idle timeout\n", __func__);
 			break;
 		}
-		if ((reg_val & 0x01) || (aw8697->done_flag == true) ||
-		    (opbuf->status == MMAP_BUF_DATA_FINISHED) ||
-		    (opbuf->status == MMAP_BUF_DATA_INVALID)) {
-			break;
-		} else if (opbuf->status == MMAP_BUF_DATA_VALID &&
-			   (reg_val & (0x01 << 4))) {
-			aw8697_i2c_writes(aw8697, reg_rtp_data,
-					  opbuf->data, opbuf->length);
-			memset(opbuf->data, 0, opbuf->length);
+
+		if (opbuf->status == MMAP_BUF_DATA_FINISHED) {
 			opbuf->status = MMAP_BUF_DATA_INVALID;
-			opbuf = opbuf->kernel_next;
-			t_start = ktime_get();
-		} else {
-			msleep(1);
+			break;
 		}
-		aw8697_i2c_read(aw8697, AW8697_REG_SYSST, &reg_val);
+
+		if (!started) {
+			if (opbuf->status == MMAP_BUF_DATA_VALID) {
+				aw8697_haptic_play_mode(aw8697, AW8697_HAPTIC_RTP_MODE);
+				aw8697_haptic_set_rtp_aei(aw8697, true);
+				aw8697_interrupt_clear(aw8697);
+				aw8697_haptic_start(aw8697);
+				aw8697_pm_qos_enable(true);
+				started = true;
+				t_start = ktime_get();
+			} else {
+				usleep_range(1000, 1500);
+				continue;
+			}
+		}
+
+		aw8697_i2c_read(aw8697, reg_sysst, &reg_val);
+
+		if (opbuf->status == MMAP_BUF_DATA_VALID) {
+			if (reg_val & (0x01 << 4)) {
+				if (opbuf->length > 0 &&
+				    opbuf->length <= RICHTAP_MMAP_BUF_SIZE) {
+					aw8697_i2c_writes(aw8697, reg_rtp_data,
+							  opbuf->data, opbuf->length);
+				}
+				memset(opbuf->data, 0, opbuf->length);
+				smp_wmb();
+				opbuf->status = MMAP_BUF_DATA_INVALID;
+				opbuf = opbuf->kernel_next;
+				t_start = ktime_get();
+			} else {
+				usleep_range(1000, 1500);
+			}
+		} else {
+			usleep_range(1000, 1500);
+		}
 	}
-	aw8697_haptic_set_rtp_aei(aw8697, false);
+
+	if (started) {
+		aw8697_haptic_set_rtp_aei(aw8697, false);
+		aw8697_haptic_stop(aw8697);
+		aw8697_pm_qos_enable(false);
+	}
 	aw8697->haptic_rtp_mode = false;
 }
 #endif
@@ -3594,6 +3627,9 @@ static long aw8697_file_unlocked_ioctl(struct file *file, unsigned int cmd,
 		aw8697_haptic_set_gain(aw8697, arg);
 		break;
 	case RICHTAP_STREAM_MODE:
+		aw8697->done_flag = true;
+		cancel_work_sync(&aw8697->haptic_rtp_work);
+		aw8697_pm_qos_enable(false);
 		haptic_clean_buf(aw8697, MMAP_BUF_DATA_INVALID);
 		aw8697_haptic_stop(aw8697);
 		aw8697->done_flag = false;
@@ -3604,11 +3640,12 @@ static long aw8697_file_unlocked_ioctl(struct file *file, unsigned int cmd,
 		break;
 	case RICHTAP_STOP_MODE:
 		aw8697->done_flag = true;
+		cancel_work_sync(&aw8697->haptic_rtp_work);
 		haptic_clean_buf(aw8697, MMAP_BUF_DATA_FINISHED);
-		usleep_range(2000, 2000);
 		aw8697_haptic_set_rtp_aei(aw8697, false);
 		aw8697_haptic_stop(aw8697);
 		aw8697->haptic_rtp_mode = false;
+		aw8697_pm_qos_enable(false);
 		break;
 	default:
 		dev_err(aw8697->dev, "%s, unknown cmd\n", __func__);
