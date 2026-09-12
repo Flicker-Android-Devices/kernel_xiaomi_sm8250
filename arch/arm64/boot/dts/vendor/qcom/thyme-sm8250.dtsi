@@ -284,6 +284,8 @@ And public attribution of xiaomi platforms(like J2S and so and)
 		vib_bst_vol_default = < 0x0c >;
 		vib_bst_vol_ram = < 0x10 >;
 		vib_bst_vol_rtp = < 0x10 >;
+		vib_f0_pre = < 1730 >;
+        vib_f0_cali_percen = < 10 >;
 		status = "ok";
 	};
 };

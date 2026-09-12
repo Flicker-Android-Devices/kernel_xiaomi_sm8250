@@ -359,6 +359,16 @@ And public attribution of xiaomi platforms(like J1 and so and)
 
 };
 
+&qupv3_se11_i2c {
+	status = "ok";
+	aw8697_haptic@5A {
+		compatible = "awinic,aw8697_haptic";
+		vib_f0_pre = < 1730 >;
+        vib_f0_cali_percen = < 10 >;
+		status = "ok";
+	};
+};
+
 &qupv3_se13_i2c {
 	#address-cells = <1>;
 	#size-cells = <0>;
