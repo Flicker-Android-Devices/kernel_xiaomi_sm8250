@@ -3981,6 +3981,12 @@ static enum hrtimer_restart qti_hap_stop_timer(struct hrtimer *timer)
 	int rc;
 
 	aw_pr_info("%s enter\n", __func__);
+#ifdef AAC_RICHTAP
+	if (aw8697->haptic_rtp_mode) {
+		aw_dev_info(aw8697->dev, "%s: RichTap RTP stream is active, ignore stop timer\n", __func__);
+		return HRTIMER_NORESTART;
+	}
+#endif
 	aw8697->play.length_us = 0;
 	rc = aw8697_haptic_play_go(aw8697, false);	// qti_haptics_play(aw8697, false);
 	if (rc < 0)
@@ -3996,6 +4002,12 @@ static enum hrtimer_restart qti_hap_disable_timer(struct hrtimer *timer)
 	int rc;
 
 	aw_pr_info("%s enter\n", __func__);
+#ifdef AAC_RICHTAP
+	if (aw8697->haptic_rtp_mode) {
+		aw_dev_info(aw8697->dev, "%s: RichTap RTP stream is active, ignore disable timer\n", __func__);
+		return HRTIMER_NORESTART;
+	}
+#endif
 	if (aw8697->chip_version == AW8697_CHIP_9X) {
 		rc = aw8697_haptic_play_go(aw8697, false);	//qti_haptics_module_en(aw8697, false);
 	} else {
@@ -4013,6 +4025,12 @@ static enum hrtimer_restart aw8697_vibrator_timer_func(struct hrtimer *timer)
 	struct aw8697 *aw8697 = container_of(timer, struct aw8697, timer);
 
 	aw_pr_info("%s enter\n", __func__);
+#ifdef AAC_RICHTAP
+	if (aw8697->haptic_rtp_mode) {
+		aw_dev_info(aw8697->dev, "%s: RichTap RTP stream is active, ignore timer\n", __func__);
+		return HRTIMER_NORESTART;
+	}
+#endif
 
 	aw8697->state = 0;
 	//schedule_work(&aw8697->vibrator_work);
@@ -4029,6 +4047,12 @@ static void aw8697_vibrator_work_routine(struct work_struct *work)
 	aw_pr_debug("%s enter\n", __func__);
 	aw_pr_info("%s: effect_id = %d state=%d activate_mode = %d duration = %d\n", __func__,
 		aw8697->effect_id, aw8697->state, aw8697->activate_mode, aw8697->duration);
+#ifdef AAC_RICHTAP
+	if (aw8697->haptic_rtp_mode) {
+		aw_dev_info(aw8697->dev, "%s: RichTap RTP stream is active, ignore vibrator work\n", __func__);
+		return;
+	}
+#endif
 	mutex_lock(&aw8697->lock);
 	aw8697_haptic_upload_lra(aw8697, F0_CALI);
 	aw8697_haptic_stop(aw8697);
@@ -5026,6 +5050,13 @@ static int aw8697_haptics_playback(struct input_dev *dev, int effect_id,
 	if (aw8697->osc_cali_run != 0)
 		return 0;
 
+#ifdef AAC_RICHTAP
+	if (aw8697->haptic_rtp_mode) {
+		aw_dev_info(aw8697->dev, "%s: RichTap RTP stream is active, ignore input playback\n", __func__);
+		return 0;
+	}
+#endif
+
 	if (val > 0)
 		aw8697->state = 1;
 	if (val <= 0)
@@ -5081,6 +5112,13 @@ static void set_gain(struct work_struct * work)
 	struct aw8697 *aw8697 = container_of(work, struct aw8697, set_gain_work);
 	aw_pr_debug("%s enter set_gain queue work\n", __func__);
 
+#ifdef AAC_RICHTAP
+	if (aw8697->haptic_rtp_mode) {
+		aw_dev_info(aw8697->dev, "%s: RichTap RTP stream is active, ignore set_gain\n", __func__);
+		return;
+	}
+#endif
+
 	if (aw8697->new_gain >= 0x7FFF)
 		aw8697->level = 0x80; /*128*/
 	else if (aw8697->new_gain <= 0x3FFF)
@@ -5098,6 +5136,12 @@ static void aw8697_haptics_set_gain(struct input_dev *dev, u16 gain)
 {
 	struct aw8697 *aw8697 = input_get_drvdata(dev);
 	aw_pr_debug("%s enter\n", __func__);
+#ifdef AAC_RICHTAP
+	if (aw8697->haptic_rtp_mode) {
+		aw_dev_info(aw8697->dev, "%s: RichTap RTP stream is active, ignore input set_gain\n", __func__);
+		return;
+	}
+#endif
 	aw8697->new_gain = gain;
 	queue_work(aw8697->work_queue, &aw8697->set_gain_work);
 }
