@@ -1,8 +1,14 @@
 # SPDX-License-Identifier: GPL-2.0-only
 TECHPACK?=y
 
-techpack-dirs := $(shell find $(srctree)/techpack -maxdepth 1 -mindepth 1 -type d -not -name ".*")
+techpack-dirs := $(shell find $(srctree)/techpack -maxdepth 1 -mindepth 1 -type d -not -name ".*" -not -name "camera-bengal")
+ifeq ($(CONFIG_SPECTRA_CAMERA_BENGAL),y)
+techpack-dirs += $(srctree)/techpack/camera-bengal
+endif
 obj-${TECHPACK} += stub/ $(addsuffix /,$(subst $(srctree)/techpack/,,$(techpack-dirs)))
 
-techpack-header-dirs := $(shell find $(srctree)/techpack -maxdepth 1 -mindepth 1 -type d -not -name ".*")
+techpack-header-dirs := $(shell find $(srctree)/techpack -maxdepth 1 -mindepth 1 -type d -not -name ".*" -not -name "camera-bengal")
+ifeq ($(CONFIG_SPECTRA_CAMERA_BENGAL),y)
+techpack-header-dirs += $(srctree)/techpack/camera-bengal
+endif
 header-${TECHPACK} += $(addsuffix /include/uapi/,$(subst $(srctree)/techpack/,,$(techpack-header-dirs)))
