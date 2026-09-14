@@ -1069,7 +1069,7 @@ static int cam_ois_get_data(struct cam_ois_ctrl_t *o_ctrl,
 	t_now = get_cycles();
 	boottime64 = (uint64_t)((ts64.tv_sec * 1000000000) + ts64.tv_nsec);
 
-#ifdef CONFIG_MACH_XIAOMI_PSYCHE
+#ifdef CONFIG_CAMERA_CAS
 	if (o_ctrl->opcode.ois_get_data != 0) {
 		uint32_t ois_addr =
 			(o_ctrl->opcode.ois_get_data & 0xFFFF0000) >> 16;

@@ -694,7 +694,7 @@ static int cam_ife_csid_global_reset(struct cam_ife_csid_hw *csid_hw)
 		cam_io_w_mb(0x2, soc_info->reg_map[0].mem_base +
 			csid_reg->rdi_reg[i]->csid_rdi_cfg0_addr);
 
-#ifdef CONFIG_MACH_XIAOMI_PSYCHE
+#ifdef CONFIG_CAMERA_CAS
 	/* reset SW regs first, then HW */
 	rc = cam_ife_csid_reset_regs(csid_hw, false);
 	if (rc < 0)
