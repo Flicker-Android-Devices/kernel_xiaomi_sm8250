@@ -118,7 +118,7 @@ struct cam_ois_opcode {
 	uint32_t coeff;
 	uint32_t pheripheral;
 	uint32_t memory;
-#ifdef CONFIG_MACH_XIAOMI_PSYCHE
+#ifdef CONFIG_CAMERA_CAS
 	uint32_t ois_get_data;
 #endif
 	uint8_t fw_addr_type;
