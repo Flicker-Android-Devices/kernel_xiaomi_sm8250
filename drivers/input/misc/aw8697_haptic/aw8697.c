@@ -3597,7 +3597,7 @@ static long aw8697_file_unlocked_ioctl(struct file *file, unsigned int cmd,
 			ret = -EINVAL;
 			break;
 		}
-		aw8697_haptic_set_bst_vol(aw8697, 0x11);
+		aw8697_haptic_set_bst_vol(aw8697, aw8697->info.bst_vol_rtp);
 		aw8697_haptic_upload_lra(aw8697, OSC_CALI);
 		aw8697_haptic_play_mode(aw8697, AW8697_HAPTIC_RTP_MODE);
 		aw8697_haptic_start(aw8697);
@@ -3627,7 +3627,7 @@ static long aw8697_file_unlocked_ioctl(struct file *file, unsigned int cmd,
 		aw8697_haptic_stop(aw8697);
 		aw8697->done_flag = false;
 		aw8697->haptic_rtp_mode = true;
-		aw8697_haptic_set_bst_vol(aw8697, 0x11);
+		aw8697_haptic_set_bst_vol(aw8697, aw8697->info.bst_vol_rtp);
 		aw8697_haptic_upload_lra(aw8697, OSC_CALI);
 		schedule_work(&aw8697->haptic_rtp_work);
 		break;
