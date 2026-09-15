@@ -15,6 +15,7 @@ struct ktz8866_platform_data {
 	int hw_en_gpio;
 	int enp_gpio;
 	int enn_gpio;
+	int panelid_gpio;
 };
 
 /* KTZ8866 backlight I2C driver */
@@ -48,6 +49,7 @@ struct ktz8866_platform_data {
 #define KTZ8866_DISP_DIMMING 0x14
 #define KTZ8866_DISP_FULL_CURRENT 0x15
 #define BL_LEVEL_MAX 2047
+#define BL_LEVEL_MAX_HBM 4095
 
 struct ktz8866_reg {
 	unsigned char reg;
@@ -65,6 +67,8 @@ struct ktz8866_led {
 	int level;
 	bool ktz8866_status;
 	bool dimming_status;
+	int panel_id;
+	bool HBMenable;
 };
 
 static struct ktz8866_reg ktz8866_regs_conf[] = {
@@ -73,7 +77,7 @@ static struct ktz8866_reg ktz8866_regs_conf[] = {
 	{ KTZ8866_DISP_BC1,
 	  0x33 }, /* Backlight OVP 26.4V, exponential mapping*/
 	{ KTZ8866_DISP_FULL_CURRENT,
-	  0xb1 }, /* Backlight Full-scale LED Current 23mA*/
+	  0xb1 }, /* CSOT panel Backlight Full-scale LED Current 22.8mA*/
 	{ KTZ8866_DISP_BC2, 0xbd }, /* LED ramping time 128ms*/
 	{ KTZ8866_DISP_DIMMING, 0x11 }, /* LED on/off ramping time 1ms*/
 	{ KTZ8866_DISP_BIAS_CONF1,
