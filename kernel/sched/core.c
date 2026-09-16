@@ -5070,12 +5070,16 @@ recheck:
 	 * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
 	 * SCHED_BATCH and SCHED_IDLE is 0.
 	 */
-	if ((p->mm && attr->sched_priority > MAX_USER_RT_PRIO-1) ||
-	    (!p->mm && attr->sched_priority > MAX_RT_PRIO-1))
-		return -EINVAL;
-	if ((dl_policy(policy) && !__checkparam_dl(attr)) ||
-	    (rt_policy(policy) != (attr->sched_priority != 0)))
-		return -EINVAL;
+	if (attr->sched_flags & SCHED_FLAG_KEEP_PARAMS) {
+		newprio = p->normal_prio;
+	} else {
+		if ((p->mm && attr->sched_priority > MAX_USER_RT_PRIO-1) ||
+		    (!p->mm && attr->sched_priority > MAX_RT_PRIO-1))
+			return -EINVAL;
+		if ((dl_policy(policy) && !__checkparam_dl(attr)) ||
+		    (rt_policy(policy) != (attr->sched_priority != 0)))
+			return -EINVAL;
+	}
 
 	/*
 	 * Allow unprivileged RT tasks to decrease priority:
