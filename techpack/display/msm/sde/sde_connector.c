@@ -112,6 +112,15 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 	if (brightness > display->panel->bl_config.brightness_max_level)
 		brightness = display->panel->bl_config.brightness_max_level;
 
+#ifdef CONFIG_MACH_XIAOMI
+	if (bd->props.brightness_clone != brightness) {
+		bd->props.brightness_clone = brightness;
+		if (brightness != 0)
+			bd->props.brightness_clone_backup = brightness;
+		sysfs_notify(&bd->dev.kobj, NULL, "brightness_clone");
+	}
+#endif
+
 	if (brightness) {
 		int bl_min = display->panel->bl_config.bl_min_level ? : 1;
 		int bl_range = display->panel->bl_config.bl_max_level - bl_min;
@@ -180,7 +189,12 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 	bl_config = &display->panel->bl_config;
 	props.max_brightness = bl_config->brightness_max_level;
 	props.brightness = bl_config->brightness_init_level;
+#ifdef CONFIG_MACH_XIAOMI
+	props.brightness_clone = props.brightness;
+	props.brightness_clone_backup = props.brightness ? : 307;
+#else
 	props.brightness_clone_backup = 307;
+#endif
 	snprintf(bl_node_name, BL_NODE_NAME_SIZE, "panel%u-backlight",
 							display_count);
 	c_conn->bl_device = backlight_device_register(bl_node_name, dev->dev,
