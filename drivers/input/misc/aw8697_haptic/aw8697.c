@@ -4416,7 +4416,6 @@ static int aw8697_parse_dt_common(struct device *dev, struct aw8697 *aw8697,
 				  struct device_node *np)
 {
 	unsigned int val = 0;
-	unsigned int rtp_time[175];
 	struct qti_hap_config *config = &aw8697->config;
 	struct device_node *child_node;
 	struct qti_hap_effect *effect;
@@ -4451,12 +4450,18 @@ static int aw8697_parse_dt_common(struct device *dev, struct aw8697 *aw8697,
 	if (val != 0)
 		printk("vib_f0_cali_percen not found\n");
 
-	val =
-	    of_property_read_u32_array(np, "vib_rtp_time", rtp_time,
-				       ARRAY_SIZE(rtp_time));
-	if (val != 0)
-		printk("%s vib_rtp_time not found\n", __func__);
-	memcpy(aw8697->info.rtp_time, rtp_time, sizeof(rtp_time));
+	memset(aw8697->info.rtp_time, 0, sizeof(aw8697->info.rtp_time));
+	rc = of_property_count_u32_elems(np, "vib_rtp_time");
+	if (rc <= 0) {
+		pr_err("%s: vib_rtp_time not found or empty\n", __func__);
+	} else {
+		if (rc > ARRAY_SIZE(aw8697->info.rtp_time))
+			rc = ARRAY_SIZE(aw8697->info.rtp_time);
+		val = of_property_read_u32_array(np, "vib_rtp_time",
+						 aw8697->info.rtp_time, rc);
+		if (val != 0)
+			pr_err("%s: failed to read vib_rtp_time\n", __func__);
+	}
 
 	val =
 	    of_property_read_u32(np, "vib_effect_id_boundary",
@@ -4602,10 +4607,12 @@ static int aw8697_parse_dt_common(struct device *dev, struct aw8697 *aw8697,
 		effect->brake_pattern_length = tmp;
 	}
 
-	for (j = 0; j < 175; j++)
-		aw_dev_info(aw8697->dev,
-			    " 20190420_dt aw8697->info.rtp_time[%d]: %d\n", j,
-			    aw8697->info.rtp_time[j]);
+	for (j = 0; j < ARRAY_SIZE(aw8697->info.rtp_time); j++) {
+		if (aw8697->info.rtp_time[j] != 0)
+			aw_dev_info(aw8697->dev,
+				    " 20190420_dt aw8697->info.rtp_time[%d]: %d\n", j,
+				    aw8697->info.rtp_time[j]);
+	}
 
 	for (j = 0; j < i; j++) {
 		printk(" 20190420_dt       effect_id: %d\n",
@@ -4999,15 +5006,25 @@ static int aw8697_haptics_upload_effect(struct input_dev *dev,
 			aw8697->activate_mode = AW8697_HAPTIC_ACTIVATE_RTP_MODE;
 			aw_pr_debug("%s: aw8697->effect_id=%d , aw8697->activate_mode = %d\n",
 				__func__, aw8697->effect_id, aw8697->activate_mode);
-			data[1] = aw8697->info.rtp_time[aw8697->effect_id]/1000; /*second data*/
-			data[2] = aw8697->info.rtp_time[aw8697->effect_id];  /*millisecond data*/
+			if (aw8697->effect_id < ARRAY_SIZE(aw8697->info.rtp_time)) {
+				data[1] = aw8697->info.rtp_time[aw8697->effect_id]/1000; /*second data*/
+				data[2] = aw8697->info.rtp_time[aw8697->effect_id];  /*millisecond data*/
+			} else {
+				data[1] = 0;
+				data[2] = 0;
+			}
 		}
 		if (aw8697->effect_id == CUSTOME_WAVE_ID) {
 			aw8697->activate_mode = AW8697_HAPTIC_ACTIVATE_RTP_MODE;
 			aw_pr_debug("%s: aw8697->effect_id=%d , aw8697->activate_mode = %d\n",
 				__func__, aw8697->effect_id, aw8697->activate_mode);
-			data[1] = aw8697->info.rtp_time[aw8697->effect_id]/1000; /*second data*/
-			data[2] = aw8697->info.rtp_time[aw8697->effect_id];  /*millisecond data*/
+			if (aw8697->effect_id < ARRAY_SIZE(aw8697->info.rtp_time)) {
+				data[1] = aw8697->info.rtp_time[aw8697->effect_id]/1000; /*second data*/
+				data[2] = aw8697->info.rtp_time[aw8697->effect_id];  /*millisecond data*/
+			} else {
+				data[1] = 0;
+				data[2] = 0;
+			}
 			aw8697->is_custom_wave = 1;
 			rb_init();
 		}

@@ -46,6 +46,7 @@
 #define AW8697_RTP_I2C_SINGLE_MAX_NUM       512
 
 #define HAPTIC_MAX_TIMEOUT                  10000
+#define AW8697_RTP_TIME_MAX                 256
 
 #define AW8697_VBAT_REFER                   4200
 #define AW8697_VBAT_MIN                     3000
@@ -300,7 +301,7 @@ struct aw8697_dts_info {
 	unsigned int parameter1;
 	unsigned int effect_id_boundary;
 	unsigned int effect_max;
-	unsigned int rtp_time[175];
+	unsigned int rtp_time[AW8697_RTP_TIME_MAX];
 	unsigned int trig_config[3][5];
 	unsigned int bst_vol_default;
 	unsigned int bst_vol_ram;
