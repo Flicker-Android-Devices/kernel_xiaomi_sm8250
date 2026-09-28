@@ -125,7 +125,7 @@ struct aw86927_dts_info {
 	unsigned int trig_config[24];
 	unsigned int effect_id_boundary;
 	unsigned int effect_max;
-	unsigned int rtp_time[175];
+	unsigned int rtp_time[AW_RTP_TIME_MAX];
 };
 
 struct aw86927_trig {
