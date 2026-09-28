@@ -2620,7 +2620,6 @@ int aw869x_parse_dt(struct device *dev, struct aw869x *aw869x,
 	unsigned int bstdbg[6];
 	unsigned int f0_trace_parameter[4];
 	unsigned int bemf_config[4];
-	unsigned int rtp_time[175];
 	unsigned int trig_config[15];
 	struct qti_hap_config *config = &aw869x->config;
 	struct device_node *child_node;
@@ -2727,11 +2726,18 @@ int aw869x_parse_dt(struct device *dev, struct aw869x *aw869x,
 				 &aw869x->info.effect_max);
 	if (val != 0)
 		aw_info("%s vib_effect_max not found\n", __func__);
-	val = of_property_read_u32_array(np, "vib_rtp_time", rtp_time,
-				       ARRAY_SIZE(rtp_time));
-	if (val != 0)
-		aw_info("%s vib_rtp_time not found\n", __func__);
-	memcpy(aw869x->info.rtp_time, rtp_time, sizeof(rtp_time));
+	memset(aw869x->info.rtp_time, 0, sizeof(aw869x->info.rtp_time));
+	rc = of_property_count_u32_elems(np, "vib_rtp_time");
+	if (rc <= 0) {
+		aw_info("%s vib_rtp_time not found or empty\n", __func__);
+	} else {
+		if (rc > ARRAY_SIZE(aw869x->info.rtp_time))
+			rc = ARRAY_SIZE(aw869x->info.rtp_time);
+		val = of_property_read_u32_array(np, "vib_rtp_time",
+						 aw869x->info.rtp_time, rc);
+		if (val != 0)
+			aw_info("%s vib_rtp_time read failed\n", __func__);
+	}
 	config->play_rate_us = HAP_PLAY_RATE_US_DEFAULT;
 	rc = of_property_read_u32(np, "play-rate-us", &tmp);
 	if (!rc)
@@ -2967,20 +2973,30 @@ int aw869x_haptics_upload_effect(struct input_dev *dev,
 			aw_dbg("%s: aw869x->effect_id=%d , aw869x->activate_mode = %d\n",
 				 __func__, aw869x->effect_id,
 				 aw869x->activate_mode);
-			/*second data*/
-			data[1] = aw869x->info.rtp_time[aw869x->effect_id]/1000;
-			/*millisecond data*/
-			data[2] = aw869x->info.rtp_time[aw869x->effect_id];
+			if (aw869x->effect_id < ARRAY_SIZE(aw869x->info.rtp_time)) {
+				/*second data*/
+				data[1] = aw869x->info.rtp_time[aw869x->effect_id]/1000;
+				/*millisecond data*/
+				data[2] = aw869x->info.rtp_time[aw869x->effect_id];
+			} else {
+				data[1] = 0;
+				data[2] = 0;
+			}
 		}
 		if (aw869x->effect_id == CUSTOME_WAVE_ID) {
 			aw869x->activate_mode = AW869X_HAPTIC_ACTIVATE_RTP_MODE;
 			aw_dbg("%s: aw869x->effect_id=%d , aw869x->activate_mode = %d\n",
 				 __func__, aw869x->effect_id,
 				 aw869x->activate_mode);
-			/*second data*/
-			data[1] = aw869x->info.rtp_time[aw869x->effect_id]/1000;
-			/*millisecond data*/
-			data[2] = aw869x->info.rtp_time[aw869x->effect_id];
+			if (aw869x->effect_id < ARRAY_SIZE(aw869x->info.rtp_time)) {
+				/*second data*/
+				data[1] = aw869x->info.rtp_time[aw869x->effect_id]/1000;
+				/*millisecond data*/
+				data[2] = aw869x->info.rtp_time[aw869x->effect_id];
+			} else {
+				data[1] = 0;
+				data[2] = 0;
+			}
 			aw869x->is_custom_wave = 1;
 			rb_init();
 		}
