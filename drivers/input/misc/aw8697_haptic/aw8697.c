@@ -2108,11 +2108,9 @@ static int16_t aw8697_haptic_effect_strength(struct aw8697 *aw8697)
 	if (aw8697->play.vmax_mv >= 0x7FFF)
 		aw8697->level = 0x80; /*128*/
 	else if (aw8697->play.vmax_mv <= 0x3FFF)
-		aw8697->level = 0x1E; /*30*/
+		aw8697->level = 0x30; /*48*/
 	else
-		aw8697->level = (aw8697->play.vmax_mv - 16383) / 128;
-	if( aw8697->level < 0x1E)
-		aw8697->level = 0x1E; /*30*/
+		aw8697->level = 0x30 + ((aw8697->play.vmax_mv - 16383) * (0x80 - 0x30)) / 16384;
 #endif
 
 	aw_pr_info("%s: aw8697->level =0x%x\n", __func__, aw8697->level);
@@ -2649,10 +2647,6 @@ RTP_REQUEST_DONE:
 		}
 		aw8697->rtp_init = 1;
 
-		/* ram_vbat_compensate( */
-#ifndef RTP_SET_GAIN
-		aw8697_haptic_ram_vbat_comp(aw8697, false);
-#endif
 
 		/* rtp mode config */
 		aw8697_haptic_play_mode(aw8697, AW8697_HAPTIC_RTP_MODE);
@@ -5132,12 +5126,9 @@ static void set_gain(struct work_struct * work)
 	if (aw8697->new_gain >= 0x7FFF)
 		aw8697->level = 0x80; /*128*/
 	else if (aw8697->new_gain <= 0x3FFF)
-		aw8697->level = 0x1E; /*30*/
+		aw8697->level = 0x30; /*48*/
 	else
-		aw8697->level = (aw8697->new_gain - 16383) / 128;
-
-	if( aw8697->level < 0x1E)
-		aw8697->level = 0x1E; /*30*/
+		aw8697->level = 0x30 + ((aw8697->new_gain - 16383) * (0x80 - 0x30)) / 16384;
 
 	aw8697_haptic_set_gain(aw8697, aw8697->level);
 }
