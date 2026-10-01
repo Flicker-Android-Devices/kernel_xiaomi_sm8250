@@ -1109,12 +1109,26 @@ static int verify_get_property(struct power_supply *psy,
 			return -EAGAIN;
 		break;
 	case POWER_SUPPLY_PROP_MAXIM_BATT_CYCLE_COUNT:
+#ifdef CONFIG_DS28E16_CYCLE_PAGE1
+		ret = ds28el16_get_page_data_retry(PAGE1, pagedata);
+		if (ret == DS_TRUE) {
+			if (pagedata[0] == 0xFF && pagedata[1] == 0xFF)
+				val->intval = 0;
+			else
+				val->intval = (pagedata[3] << 24) |
+					      (pagedata[2] << 16) |
+					      (pagedata[1] << 8) |
+					      pagedata[0];
+			data->cycle_count = val->intval;
+		}
+#else
 		ret = ds28el16_get_page_data_retry(DC_PAGE, pagedata);
 		if (ret == DS_TRUE) {
 			data->cycle_count = (pagedata[2] << 16) +
 					    (pagedata[1] << 8) + pagedata[0];
 			val->intval = DC_INIT_VALUE - data->cycle_count;
 		}
+#endif
 		break;
 	default:
 		ds_dbg("unsupported property %d\n", psp);
@@ -1128,8 +1142,13 @@ static int verify_set_property(struct power_supply *psy,
 			       enum power_supply_property prop,
 			       const union power_supply_propval *val)
 {
+#ifdef CONFIG_DS28E16_CYCLE_PAGE1
+	int ret;
+	unsigned char pagedata[16];
+#else
 	//int ret;
 	//unsigned char buf[50];
+#endif
 	struct ds28e16_data *data = power_supply_get_drvdata(psy);
 	int authen_result;
 
@@ -1161,7 +1180,32 @@ static int verify_set_property(struct power_supply *psy,
 		auth_BDCONST = val->intval;
 		break;
 	case POWER_SUPPLY_PROP_MAXIM_BATT_CYCLE_COUNT:
+#ifdef CONFIG_DS28E16_CYCLE_PAGE1
+		ret = ds28el16_get_page_data_retry(PAGE1, pagedata);
+		if (ret == DS_TRUE) {
+			int cycles = 0;
+			if (pagedata[0] != 0xFF || pagedata[1] != 0xFF)
+				cycles = (pagedata[3] << 24) |
+					 (pagedata[2] << 16) |
+					 (pagedata[1] << 8) |
+					 pagedata[0];
+			if (val->intval > 1)
+				cycles = val->intval;
+			else if (val->intval == 1)
+				cycles++;
+			else if (val->intval == 0)
+				cycles = 0;
+
+			pagedata[0] = cycles & 0xFF;
+			pagedata[1] = (cycles >> 8) & 0xFF;
+			pagedata[2] = (cycles >> 16) & 0xFF;
+			pagedata[3] = (cycles >> 24) & 0xFF;
+			DS28E16_cmd_writeMemory(PAGE1, pagedata);
+			data->cycle_count = cycles;
+		}
+#else
 		DS28E16_cmd_decrementCounter();
+#endif
 		break;
 	case POWER_SUPPLY_PROP_AUTHENTIC:
 		if (val->intval == 1) {
