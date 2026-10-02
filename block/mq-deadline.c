@@ -99,6 +99,7 @@ struct deadline_data {
 	int front_merges;
 	u32 async_depth;
 	int prio_aging_expire;
+	struct request_queue *q;
 
 	spinlock_t lock;
 	spinlock_t zone_lock;
@@ -662,7 +663,8 @@ static void dd_depth_updated(struct blk_mq_hw_ctx *hctx)
 
 	dd->async_depth = q->nr_requests;
 
-	sbitmap_queue_min_shallow_depth(&tags->bitmap_tags, 1);
+	sbitmap_queue_min_shallow_depth(&tags->bitmap_tags,
+					dd_to_word_depth(hctx, dd->async_depth));
 }
 
 /* Called by blk_mq_init_hctx() and blk_mq_init_sched(). */
@@ -734,6 +736,7 @@ static int dd_init_sched(struct request_queue *q, struct elevator_type *e)
 	dd->last_dir = DD_WRITE;
 	dd->fifo_batch = fifo_batch;
 	dd->prio_aging_expire = prio_aging_expire;
+	dd->q = q;
 	spin_lock_init(&dd->lock);
 	spin_lock_init(&dd->zone_lock);
 
@@ -1019,11 +1022,47 @@ STORE_JIFFIES(deadline_write_expire_store, &dd->fifo_expire[DD_WRITE], 0, INT_MA
 STORE_JIFFIES(deadline_prio_aging_expire_store, &dd->prio_aging_expire, 0, INT_MAX);
 STORE_INT(deadline_writes_starved_store, &dd->writes_starved, INT_MIN, INT_MAX);
 STORE_INT(deadline_front_merges_store, &dd->front_merges, 0, 1);
-STORE_INT(deadline_async_depth_store, &dd->async_depth, 1, INT_MAX);
 STORE_INT(deadline_fifo_batch_store, &dd->fifo_batch, 0, INT_MAX);
 #undef STORE_FUNCTION
 #undef STORE_INT
 #undef STORE_JIFFIES
+
+static void dd_update_tags_shallow_depth(struct deadline_data *dd)
+{
+	struct request_queue *q = dd->q;
+	struct blk_mq_hw_ctx *hctx;
+	int i;
+
+	if (!q)
+		return;
+
+	queue_for_each_hw_ctx(q, hctx, i) {
+		if (hctx->sched_tags)
+			sbitmap_queue_min_shallow_depth(
+				&hctx->sched_tags->bitmap_tags,
+				dd_to_word_depth(hctx, dd->async_depth));
+	}
+}
+
+static ssize_t deadline_async_depth_store(struct elevator_queue *e,
+					  const char *page, size_t count)
+{
+	struct deadline_data *dd = e->elevator_data;
+	int data, ret;
+
+	ret = kstrtoint(page, 0, &data);
+	if (ret < 0)
+		return ret;
+	if (data < 1)
+		data = 1;
+	else if (data > INT_MAX)
+		data = INT_MAX;
+
+	dd->async_depth = data;
+	dd_update_tags_shallow_depth(dd);
+
+	return count;
+}
 
 #define DD_ATTR(name) \
 	__ATTR(name, 0644, deadline_##name##_show, deadline_##name##_store)
