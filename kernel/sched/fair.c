@@ -6967,6 +6967,7 @@ enum fastpaths {
 	PREV_CPU_FASTPATH,
 };
 
+#ifdef CONFIG_SCHED_WALT
 static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 					struct task_struct *p,
 					struct find_best_target_env *fbt_env)
@@ -7433,6 +7434,7 @@ out:
 				     most_spare_cap_cpu,
 				     target_cpu, backup_cpu);
 }
+#endif /* CONFIG_SCHED_WALT */
 
 /*
  * Disable WAKE_AFFINE in the case where task @p doesn't fit in the
@@ -7784,7 +7786,6 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	bool need_idle = wake_to_idle(p);
 	int placement_boost = task_boost_policy(p);
 	u64 start_t = 0;
-	int delta = 0;
 	int task_boost = per_task_boost(p);
 	int boosted = (schedtune_task_boost(p) > 0) || (task_boost > 0);
 	int start_cpu;
@@ -7839,6 +7840,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	if (!uclamp_task_util(p, p_util_min, p_util_max))
 		goto unlock;
 
+#ifdef CONFIG_SCHED_WALT
 	if (sched_feat(FIND_BEST_TARGET)) {
 		fbt_env.is_rtg = is_rtg;
 		fbt_env.placement_boost = placement_boost;
@@ -7850,7 +7852,9 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 				   cpu : -1;
 
 		find_best_target(NULL, candidates, p, &fbt_env);
-	} else {
+	} else
+#endif
+	{
 		select_cpu_candidates(sd, candidates, pd, p, prev_cpu);
 	}
 
@@ -7887,9 +7891,11 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	}
 
 #ifdef CONFIG_SCHED_WALT
+	int delta = 0;
+
 	if (p->state == TASK_WAKING)
 		delta = task_util(p);
-#endif
+
 	if (task_placement_boost_enabled(p) || fbt_env.need_idle || boosted ||
 	    is_rtg || __cpu_overutilized(prev_cpu, delta) ||
 	    !task_fits_max(p, prev_cpu) || cpu_isolated(prev_cpu)) {
@@ -7901,6 +7907,23 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 		prev_energy = best_energy = compute_energy(p, prev_cpu, pd);
 	else
 		prev_energy = best_energy = ULONG_MAX;
+#else
+	/*
+	 * In PELT mode without WALT:
+	 * If the previous CPU doesn't fit the task (e.g. uclamp boosted or
+	 * overutilized), we shouldn't blindly pick cpumask_first(candidates)
+	 * because candidates has one CPU per performance domain (Little, Mid, Big).
+	 * Setting prev_energy to ULONG_MAX forces EAS to evaluate the candidate
+	 * CPUs from all performance domains and select the most suitable fitting CPU.
+	 */
+	if (boosted || uclamp_boosted(p) || __cpu_overutilized(prev_cpu, 0) ||
+	    !task_fits_max(p, prev_cpu) || cpu_isolated(prev_cpu) ||
+	    !cpumask_test_cpu(prev_cpu, &p->cpus_allowed)) {
+		prev_energy = best_energy = ULONG_MAX;
+	} else {
+		prev_energy = best_energy = compute_energy(p, prev_cpu, pd);
+	}
+#endif
 
 	/* Select the best candidate energy-wise. */
 	for_each_cpu(cpu, candidates) {
