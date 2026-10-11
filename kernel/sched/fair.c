@@ -3724,14 +3724,16 @@ unsigned long task_util_est(struct task_struct *p)
 }
 
 #ifdef CONFIG_UCLAMP_TASK
-static inline unsigned long uclamp_task_util(struct task_struct *p)
+static inline unsigned long uclamp_task_util(struct task_struct *p,
+					     unsigned long uclamp_min,
+					     unsigned long uclamp_max)
 {
-	return clamp(task_util_est(p),
-		     uclamp_eff_value(p, UCLAMP_MIN),
-		     uclamp_eff_value(p, UCLAMP_MAX));
+	return clamp(task_util_est(p), uclamp_min, uclamp_max);
 }
 #else
-static inline unsigned long uclamp_task_util(struct task_struct *p)
+static inline unsigned long uclamp_task_util(struct task_struct *p,
+					     unsigned long uclamp_min,
+					     unsigned long uclamp_max)
 {
 	return task_util_est(p);
 }
@@ -3859,7 +3861,10 @@ done:
 
 static inline int task_fits_capacity(struct task_struct *p, long capacity)
 {
-	return capacity * 1024 > uclamp_task_util(p) * capacity_margin;
+	unsigned long uclamp_min = uclamp_eff_value(p, UCLAMP_MIN);
+	unsigned long uclamp_max = uclamp_eff_value(p, UCLAMP_MAX);
+
+	return capacity * 1024 > uclamp_task_util(p, uclamp_min, uclamp_max) * capacity_margin;
 }
 
 static inline void update_misfit_status(struct task_struct *p, struct rq *rq)
@@ -7229,6 +7234,8 @@ static DEFINE_PER_CPU(cpumask_t, energy_cpus);
 static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sync)
 {
 	unsigned long prev_energy = ULONG_MAX, best_energy = ULONG_MAX;
+	unsigned long p_util_min = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MIN) : 0;
+	unsigned long p_util_max = uclamp_is_used() ? uclamp_eff_value(p, UCLAMP_MAX) : 1024;
 	struct root_domain *rd = cpu_rq(smp_processor_id())->rd;
 	int weight, cpu, best_energy_cpu = prev_cpu;
 	unsigned long cur_energy;
@@ -7258,7 +7265,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 		goto fail;
 
 	sync_entity_load_avg(&p->se);
-	if (!task_util_est(p))
+	if (!uclamp_task_util(p, p_util_min, p_util_max))
 		goto unlock;
 
 	/* Pre-select a set of candidate CPUs. */
