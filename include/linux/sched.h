@@ -665,8 +665,13 @@ static inline int sched_set_boost(int enable)
 }
 static inline void free_task_load_ptrs(struct task_struct *p) { }
 
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+extern void sched_update_cpu_freq_min_max(const cpumask_t *cpus,
+					u32 fmin, u32 fmax);
+#else
 static inline void sched_update_cpu_freq_min_max(const cpumask_t *cpus,
 					u32 fmin, u32 fmax) { }
+#endif
 
 static inline void sched_set_refresh_rate(enum fps fps) { }
 #endif /* CONFIG_SCHED_WALT */
