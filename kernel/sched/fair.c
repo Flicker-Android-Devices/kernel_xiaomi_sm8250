@@ -171,9 +171,35 @@ unsigned int sched_capacity_margin_up[CPU_NR] = {
 unsigned int sched_capacity_margin_down[CPU_NR] = {
 	[0 ... CPU_NR - 1] = 1078
 }; /* ~5% margin */
+
+#if defined(CONFIG_ARCH_KONA)
+/* SM8250 (4+3+1): 4 Little (0-3), 3 Mid (4-6), 1 Prime (7) */
+unsigned int sched_capacity_margin_up_boosted[CPU_NR] = {
+	3658, 3658, 3658, 3658, 1078, 1078, 1078, 1024
+}; /* 72% margin for small, 5% for mid, 0% for big+ */
+#elif defined(CONFIG_ARCH_LAGOON)
+/* SM6350 (6+2): 6 Little (0-5), 2 Big (6-7) */
+unsigned int sched_capacity_margin_up_boosted[CPU_NR] = {
+	3658, 3658, 3658, 3658, 3658, 3658, 1024, 1024
+}; /* 72% margin for small, 0% for big */
+#elif defined(CONFIG_ARCH_LITO)
+/* SM7250 (6+1+1): 6 Little (0-5), 1 Big (6), 1 Prime (7) */
 unsigned int sched_capacity_margin_up_boosted[CPU_NR] = {
 	3658, 3658, 3658, 3658, 3658, 3658, 1078, 1024
 }; /* 72% margin for small, 5% for big, 0% for big+ */
+#elif defined(CONFIG_ARCH_BENGAL) || defined(CONFIG_ARCH_KHAJE) || \
+      defined(CONFIG_ARCH_SCUBA)
+/* SM6115 / SM6225 / SM2250 (4+4): 4 Little (0-3), 4 Big (4-7) */
+unsigned int sched_capacity_margin_up_boosted[CPU_NR] = {
+	3658, 3658, 3658, 3658, 1024, 1024, 1024, 1024
+}; /* 72% margin for small, 0% for big */
+#else
+/* Default 4+4 topology fallback: 4 Little (0-3), 4 Big (4-7) */
+unsigned int sched_capacity_margin_up_boosted[CPU_NR] = {
+	3658, 3658, 3658, 3658, 1024, 1024, 1024, 1024
+}; /* 72% margin for small, 0% for big */
+#endif
+
 unsigned int sched_capacity_margin_down_boosted[CPU_NR] = {
 	3658, 3658, 3658, 3658, 3658, 3658, 3658, 3658
 }; /* not used for small cores, 72% margin for big, 72% margin for big+ */
