@@ -74,6 +74,39 @@ void topology_set_thermal_pressure(const struct cpumask *cpus,
 }
 EXPORT_SYMBOL_GPL(topology_set_thermal_pressure);
 
+#if !defined(CONFIG_SCHED_WALT) && defined(CONFIG_SCHED_THERMAL_PRESSURE)
+void sched_update_cpu_freq_min_max(const cpumask_t *cpus, u32 fmin, u32 fmax)
+{
+	int cpu;
+	unsigned long max_freq = 0;
+	unsigned long max_capacity, capacity, th_pressure = 0;
+
+	if (!cpus)
+		return;
+
+	cpu = cpumask_first(cpus);
+	if (cpu >= nr_cpu_ids)
+		return;
+
+	max_freq = per_cpu(max_cpu_freq, cpu);
+	if (!max_freq) {
+		struct cpufreq_policy *policy = cpufreq_cpu_get_raw(cpu);
+		if (policy)
+			max_freq = policy->cpuinfo.max_freq;
+	}
+
+	if (max_freq && fmax && fmax < max_freq) {
+		max_capacity = arch_scale_cpu_capacity(NULL, cpu);
+		capacity = (fmax * max_capacity) / max_freq;
+		if (capacity < max_capacity)
+			th_pressure = max_capacity - capacity;
+	}
+
+	topology_set_thermal_pressure(cpus, th_pressure);
+}
+EXPORT_SYMBOL_GPL(sched_update_cpu_freq_min_max);
+#endif
+
 static ssize_t cpu_capacity_show(struct device *dev,
 				 struct device_attribute *attr,
 				 char *buf)
