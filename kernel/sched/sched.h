@@ -3275,7 +3275,14 @@ static inline void walt_fixup_cum_window_demand(struct rq *rq,
 #ifdef CONFIG_SMP
 static inline unsigned long thermal_cap(int cpu)
 {
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+	unsigned long th_pressure = arch_scale_thermal_pressure(cpu);
+	unsigned long cpu_cap = arch_scale_cpu_capacity(NULL, cpu);
+
+	return cpu_cap - min(th_pressure, cpu_cap);
+#else
 	return SCHED_CAPACITY_SCALE;
+#endif
 }
 #endif
 
