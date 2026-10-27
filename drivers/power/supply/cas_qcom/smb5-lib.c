@@ -3955,6 +3955,10 @@ int smblib_set_prop_system_temp_level(struct smb_charger *chg,
 		pr_err("Couldn't get USB Online status, rc=%d\n", rc);
 
 	if (!pval.intval || chg->power_good_en) {
+		if (chg->system_temp_level == 0 && !chg->power_good_en) {
+			vote(chg->usb_icl_votable, THERMAL_DAEMON_VOTER, false, 0);
+			vote(chg->fcc_votable, THERMAL_DAEMON_VOTER, false, 0);
+		}
 		smblib_dbg(chg, PR_OEM, "usb not online, don't set thermal\n");
 		return 0;
 	}
@@ -3968,12 +3972,15 @@ int smblib_set_prop_system_temp_level(struct smb_charger *chg,
 #endif
 
 	if (chg->thermal_taper &&
-	    chg->pd_active == POWER_SUPPLY_PD_PPS_ACTIVE) {
+	    chg->pd_active == POWER_SUPPLY_PD_PPS_ACTIVE &&
+	    chg->system_temp_level > 0) {
 		schedule_delayed_work(
 			&chg->thermal_setting_work,
 			msecs_to_jiffies(chg->thermal_taper_rate));
-	} else
+	} else {
+		cancel_delayed_work(&chg->thermal_setting_work);
 		smblib_therm_charging(chg);
+	}
 
 	return 0;
 }

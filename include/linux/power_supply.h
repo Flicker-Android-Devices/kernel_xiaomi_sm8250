@@ -690,6 +690,9 @@ struct power_supply {
 #ifdef CONFIG_THERMAL
 	struct thermal_zone_device *tzd;
 	struct thermal_cooling_device *tcd;
+	bool thermal_remove;
+	int saved_charge_cntl_limit;
+	int saved_dc_thermal_level;
 #endif
 
 #ifdef CONFIG_LEDS_TRIGGERS
