@@ -749,8 +749,45 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(time_ot),
 };
 
+#ifdef CONFIG_THERMAL
+static ssize_t thermal_remove_show(struct device *dev,
+				   struct device_attribute *attr,
+				   char *buf)
+{
+	struct power_supply *psy = dev_get_drvdata(dev);
+
+	return sprintf(buf, "%d\n", psy->thermal_remove ? 1 : 0);
+}
+
+static ssize_t thermal_remove_store(struct device *dev,
+				    struct device_attribute *attr,
+				    const char *buf, size_t count)
+{
+	struct power_supply *psy = dev_get_drvdata(dev);
+	union power_supply_propval val = {0, };
+	int remove;
+
+	if (kstrtoint(buf, 0, &remove))
+		return -EINVAL;
+
+	psy->thermal_remove = !!remove;
+	if (psy->desc->set_property) {
+		val.intval = psy->thermal_remove ? 0 : psy->saved_charge_cntl_limit;
+		psy->desc->set_property(psy,
+			POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT, &val);
+		val.intval = psy->thermal_remove ? 0 : psy->saved_dc_thermal_level;
+		psy->desc->set_property(psy,
+			POWER_SUPPLY_PROP_DC_THERMAL_LEVELS, &val);
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(thermal_remove);
+#endif
+
 static struct attribute *
-__power_supply_attrs[ARRAY_SIZE(power_supply_attrs) + 1];
+__power_supply_attrs[ARRAY_SIZE(power_supply_attrs) + 2];
 
 static umode_t power_supply_attr_is_visible(struct kobject *kobj,
 					   struct attribute *attr,
@@ -760,6 +797,17 @@ static umode_t power_supply_attr_is_visible(struct kobject *kobj,
 	struct power_supply *psy = dev_get_drvdata(dev);
 	umode_t mode = S_IRUSR | S_IRGRP | S_IROTH;
 	int i;
+
+#ifdef CONFIG_THERMAL
+	if (attr == &dev_attr_thermal_remove.attr) {
+		for (i = 0; i < psy->desc->num_properties; i++) {
+			if (psy->desc->properties[i] ==
+			    POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT)
+				return mode | S_IWUSR | S_IWGRP;
+		}
+		return 0;
+	}
+#endif
 
 	if (attrno == POWER_SUPPLY_PROP_TYPE)
 		return mode;
@@ -797,6 +845,10 @@ void power_supply_init_attrs(struct device_type *dev_type)
 
 	for (i = 0; i < ARRAY_SIZE(power_supply_attrs); i++)
 		__power_supply_attrs[i] = &power_supply_attrs[i].attr;
+#ifdef CONFIG_THERMAL
+	__power_supply_attrs[ARRAY_SIZE(power_supply_attrs)] =
+		&dev_attr_thermal_remove.attr;
+#endif
 }
 
 static char *kstruprdup(const char *str, gfp_t gfp)
