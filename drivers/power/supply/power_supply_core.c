@@ -640,6 +640,16 @@ int power_supply_get_property(struct power_supply *psy,
 		return -ENODEV;
 	}
 
+#ifdef CONFIG_THERMAL
+	if (psy->thermal_remove &&
+	    (psp == POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT ||
+	     psp == POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL ||
+	     psp == POWER_SUPPLY_PROP_DC_THERMAL_LEVELS)) {
+		val->intval = 0;
+		return 0;
+	}
+#endif
+
 	return psy->desc->get_property(psy, psp, val);
 }
 EXPORT_SYMBOL_GPL(power_supply_get_property);
@@ -650,6 +660,25 @@ int power_supply_set_property(struct power_supply *psy,
 {
 	if (atomic_read(&psy->use_cnt) <= 0 || !psy->desc->set_property)
 		return -ENODEV;
+
+#ifdef CONFIG_THERMAL
+	if (psp == POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT ||
+	    psp == POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL) {
+		psy->saved_charge_cntl_limit = val->intval;
+		if (psy->thermal_remove) {
+			union power_supply_propval zero_val = { .intval = 0 };
+
+			return psy->desc->set_property(psy, psp, &zero_val);
+		}
+	} else if (psp == POWER_SUPPLY_PROP_DC_THERMAL_LEVELS) {
+		psy->saved_dc_thermal_level = val->intval;
+		if (psy->thermal_remove) {
+			union power_supply_propval zero_val = { .intval = 0 };
+
+			return psy->desc->set_property(psy, psp, &zero_val);
+		}
+	}
+#endif
 
 	return psy->desc->set_property(psy, psp, val);
 }
@@ -795,7 +824,8 @@ static int ps_set_cur_charge_cntl_limit(struct thermal_cooling_device *tcd,
 	int ret;
 
 	psy = tcd->devdata;
-	val.intval = state;
+	psy->saved_charge_cntl_limit = state;
+	val.intval = psy->thermal_remove ? 0 : state;
 	ret = psy->desc->set_property(psy,
 		POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT, &val);
 
