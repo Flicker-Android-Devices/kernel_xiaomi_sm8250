@@ -26,7 +26,7 @@
 #define SLAVE_DEFAULT_FCC__MAH 4500000
 #define FG_FULL 100
 #define FG_RAW_FULL 10000
-#define SHUTDOWN_DELAY_VOL 3300
+#define SHUTDOWN_DELAY_VOL 3410
 #define BQ_MAXIUM_VOLTAGE_HYS 10000
 #define BMS_FG_VERIFY "BMS_FG_VERIFY"
 #define SMART_BATTERY_FV "SMART_BATTERY_FV"
@@ -121,6 +121,7 @@ struct dual_fg_chip {
 
 	bool shutdown_delay;
 	bool shutdown_delay_enable;
+	bool shutdown_soc;
 
 	/* move update charge full states  */
 	bool charge_done;
@@ -1042,6 +1043,12 @@ static int fg_get_batt_capacity_level(struct dual_fg_chip *bq)
 	union power_supply_propval pval = {
 		0,
 	};
+
+	if (bq->shutdown_soc) {
+		bq_dbg(PR_OEM, "dual-fg soc0 CAPACITY_LEVEL_CRITICAL\n");
+		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+	}
+
 	dual_fg_check_fg_matser_psy(bq);
 	dual_fg_check_fg_slave_psy(bq);
 	if (!bq->fg_master_psy || !bq->fg_slave_psy) {
@@ -1054,6 +1061,11 @@ static int fg_get_batt_capacity_level(struct dual_fg_chip *bq)
 	rc = power_supply_get_property(bq->fg_slave_psy,
 				       POWER_SUPPLY_PROP_CAPACITY_LEVEL, &pval);
 	capacity_level_slave = pval.intval;
+
+	if (capacity_level_master == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL ||
+	    capacity_level_slave == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+
 	/* dual battery is same  for k81*/
 	capacity_level = (capacity_level_master + capacity_level_slave + 1) / 2;
 	return capacity_level;
@@ -1417,6 +1429,7 @@ static int fg_get_property(struct power_supply *psy,
 	int vbat_mv;
 	static bool shutdown_delay_cancel;
 	static bool last_shutdown_delay;
+	static bool last_shutdown_soc;
 	union power_supply_propval pval = {
 		0,
 	};
@@ -1488,21 +1501,54 @@ static int fg_get_property(struct power_supply *psy,
 					bq->shutdown_delay = false;
 					shutdown_delay_cancel = true;
 					val->intval = 1;
+					bq->shutdown_soc = false;
 				} else {
 					bq->shutdown_delay = false;
-					bq_dbg(PR_OEM,
-					       "shutdown_delay_cancel:%d, shutdown vbat_uv_2::%d\n",
-					       shutdown_delay_cancel, vbat_mv);
-					if (vbat_mv > SHUTDOWN_DELAY_VOL + 50)
+					if (shutdown_delay_cancel &&
+					    status == POWER_SUPPLY_STATUS_CHARGING) {
 						val->intval = 1;
+					} else {
+						shutdown_delay_cancel = false;
+						bq->shutdown_soc = true;
+						bq_dbg(PR_OEM,
+						       "dual-fg soc0 shutdown now\n");
+					}
 				}
 			} else {
 				bq->shutdown_delay = false;
 				shutdown_delay_cancel = false;
+				bq->shutdown_soc = false;
 			}
 
-			if (last_shutdown_delay != bq->shutdown_delay) {
+			if (last_shutdown_delay != bq->shutdown_delay ||
+			    last_shutdown_soc != bq->shutdown_soc) {
 				last_shutdown_delay = bq->shutdown_delay;
+				last_shutdown_soc = bq->shutdown_soc;
+				if (bq->fg_psy)
+					power_supply_changed(bq->fg_psy);
+			}
+		} else {
+			if (val->intval == 0) {
+				if (bq->batt_psy) {
+					power_supply_get_property(
+						bq->batt_psy,
+						POWER_SUPPLY_PROP_STATUS,
+						&pval);
+					status = pval.intval;
+				}
+				if (status != POWER_SUPPLY_STATUS_CHARGING) {
+					bq->shutdown_soc = true;
+					bq_dbg(PR_OEM,
+					       "dual-fg soc0 shutdown now (no delay)\n");
+				} else {
+					bq->shutdown_soc = false;
+				}
+			} else {
+				bq->shutdown_soc = false;
+			}
+
+			if (last_shutdown_soc != bq->shutdown_soc) {
+				last_shutdown_soc = bq->shutdown_soc;
 				if (bq->fg_psy)
 					power_supply_changed(bq->fg_psy);
 			}
@@ -2006,6 +2052,7 @@ static int dual_fuelgauge_probe(struct platform_device *pdev)
 	bq->fake_temp = -EINVAL;
 	bq->fake_volt = -EINVAL;
 	bq->fake_chip_ok = -EINVAL;
+	bq->shutdown_soc = false;
 
 	bq->fg_master_psy = NULL;
 	bq->fg_slave_psy = NULL;

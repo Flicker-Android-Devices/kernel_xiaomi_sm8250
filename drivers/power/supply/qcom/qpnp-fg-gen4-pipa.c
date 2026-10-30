@@ -5305,8 +5305,12 @@ static int fg_psy_get_property(struct power_supply *psy,
 					pval->intval = 1;
 				} else {
 					fg->shutdown_delay = false;
-					if (shutdown_delay_cancel)
+					if (shutdown_delay_cancel &&
+					    fg->charge_status == POWER_SUPPLY_STATUS_CHARGING) {
 						pval->intval = 1;
+					} else {
+						shutdown_delay_cancel = false;
+					}
 				}
 			} else {
 				fg->shutdown_delay = false;
