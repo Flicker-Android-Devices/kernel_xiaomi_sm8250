@@ -201,6 +201,7 @@ struct bq_fg_chip {
 
 	bool batt_fc;
 	bool batt_fd; /* full depleted */
+	bool shutdown_soc;
 
 	bool batt_dsg;
 	bool batt_rca; /* remaining capacity alarm */
@@ -1289,13 +1290,16 @@ static int fg_get_batt_status(struct bq_fg_chip *bq)
 
 static int fg_get_batt_capacity_level(struct bq_fg_chip *bq)
 {
-	if (bq->batt_fc)
+	if (bq->batt_fc) {
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
-	else if (bq->batt_rca)
-		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
-	else if (bq->batt_fd)
+	} else if (bq->shutdown_soc) {
+		bq_dbg(PR_OEM, "soc0 CAPACITY_LEVEL_CRITICAL\n");
 		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
-	else
+	} else if (bq->batt_rca && bq->batt_soc <= 15) {
+		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+	} else if (bq->batt_fd && bq->batt_soc <= 15) {
+		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+	} else
 		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
 }
 
@@ -1417,7 +1421,7 @@ static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_DONE,
 	POWER_SUPPLY_PROP_SOH,
 };
-#define SHUTDOWN_DELAY_VOL 6600
+#define SHUTDOWN_DELAY_VOL 6820
 #define SHUTDOWN_VOL 6800
 static int fg_get_property(struct power_supply *psy,
 			   enum power_supply_property psp,
@@ -1429,6 +1433,7 @@ static int fg_get_property(struct power_supply *psy,
 	int vbat_mv;
 	static bool shutdown_delay_cancel;
 	static bool last_shutdown_delay;
+	static bool last_shutdown_soc;
 	union power_supply_propval pval = {
 		0,
 	};
@@ -1494,18 +1499,54 @@ static int fg_get_property(struct power_supply *psy,
 					bq->shutdown_delay = false;
 					shutdown_delay_cancel = true;
 					val->intval = 1;
+					bq->shutdown_soc = false;
 				} else {
 					bq->shutdown_delay = false;
-					if (shutdown_delay_cancel)
+					if (shutdown_delay_cancel &&
+					    status == POWER_SUPPLY_STATUS_CHARGING) {
 						val->intval = 1;
+					} else {
+						shutdown_delay_cancel = false;
+						bq->shutdown_soc = true;
+						bq_dbg(PR_OEM,
+						       "soc0 shutdown now\n");
+					}
 				}
 			} else {
 				bq->shutdown_delay = false;
 				shutdown_delay_cancel = false;
+				bq->shutdown_soc = false;
 			}
 
-			if (last_shutdown_delay != bq->shutdown_delay) {
+			if (last_shutdown_delay != bq->shutdown_delay ||
+			    last_shutdown_soc != bq->shutdown_soc) {
 				last_shutdown_delay = bq->shutdown_delay;
+				last_shutdown_soc = bq->shutdown_soc;
+				if (bq->fg_psy)
+					power_supply_changed(bq->fg_psy);
+			}
+		} else {
+			if (val->intval == 0) {
+				if (bq->batt_psy) {
+					power_supply_get_property(
+						bq->batt_psy,
+						POWER_SUPPLY_PROP_STATUS,
+						&pval);
+					status = pval.intval;
+				}
+				if (status != POWER_SUPPLY_STATUS_CHARGING) {
+					bq->shutdown_soc = true;
+					bq_dbg(PR_OEM,
+					       "soc0 shutdown now (no delay)\n");
+				} else {
+					bq->shutdown_soc = false;
+				}
+			} else {
+				bq->shutdown_soc = false;
+			}
+
+			if (last_shutdown_soc != bq->shutdown_soc) {
+				last_shutdown_soc = bq->shutdown_soc;
 				if (bq->fg_psy)
 					power_supply_changed(bq->fg_psy);
 			}
@@ -2749,6 +2790,7 @@ static int bq_fg_probe(struct i2c_client *client,
 	bq->fake_temp = -EINVAL;
 	bq->fake_volt = -EINVAL;
 	bq->fake_chip_ok = -EINVAL;
+	bq->shutdown_soc = false;
 	bq->ffc_term_curr = DEFUALT_FFC_TERM_CURR;
 	bq->term_curr = DEFUALT_TERM_CURR;
 	if (bq->chip == BQ27Z561) {

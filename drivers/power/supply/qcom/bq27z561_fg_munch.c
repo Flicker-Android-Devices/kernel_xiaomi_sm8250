@@ -1531,6 +1531,7 @@ static int fg_get_property(struct power_supply *psy,
 	int vbat_mv;
 	static bool shutdown_delay_cancel[FG_MAX_INDEX];
 	static bool last_shutdown_delay[FG_MAX_INDEX];
+	static bool last_shutdown_soc[FG_MAX_INDEX];
 	union power_supply_propval pval = {
 		0,
 	};
@@ -1632,25 +1633,61 @@ static int fg_get_property(struct power_supply *psy,
 					shutdown_delay_cancel[bq->fg_index] =
 						true;
 					val->intval = 1;
+					bq->shutdown_soc = false;
 				} else {
 					bq->shutdown_delay = false;
-					if (shutdown_delay_cancel[bq->fg_index])
+					if (shutdown_delay_cancel[bq->fg_index] &&
+					    status == POWER_SUPPLY_STATUS_CHARGING) {
 						val->intval = 1;
-					else {
+					} else {
+						shutdown_delay_cancel[bq->fg_index] =
+							false;
 						bq->shutdown_soc = true;
 						bq_dbg(PR_OEM,
-						       "soc0 shutdown now");
+						       "soc0 shutdown now\n");
 					}
 				}
 			} else {
 				bq->shutdown_delay = false;
 				shutdown_delay_cancel[bq->fg_index] = false;
+				bq->shutdown_soc = false;
 			}
 
 			if (last_shutdown_delay[bq->fg_index] !=
-			    bq->shutdown_delay) {
+			    bq->shutdown_delay ||
+			    last_shutdown_soc[bq->fg_index] !=
+			    bq->shutdown_soc) {
 				last_shutdown_delay[bq->fg_index] =
 					bq->shutdown_delay;
+				last_shutdown_soc[bq->fg_index] =
+					bq->shutdown_soc;
+				if (bq->fg_psy)
+					power_supply_changed(bq->fg_psy);
+			}
+		} else {
+			if (val->intval == 0) {
+				if (bq->batt_psy) {
+					power_supply_get_property(
+						bq->batt_psy,
+						POWER_SUPPLY_PROP_STATUS,
+						&pval);
+					status = pval.intval;
+				}
+				if (status != POWER_SUPPLY_STATUS_CHARGING) {
+					bq->shutdown_soc = true;
+					bq_dbg(PR_OEM,
+					       "soc0 shutdown now (no delay)\n");
+				} else {
+					bq->shutdown_soc = false;
+				}
+			} else {
+				bq->shutdown_soc = false;
+			}
+
+			if (last_shutdown_soc[bq->fg_index] !=
+			    bq->shutdown_soc) {
+				last_shutdown_soc[bq->fg_index] =
+					bq->shutdown_soc;
 				if (bq->fg_psy)
 					power_supply_changed(bq->fg_psy);
 			}
