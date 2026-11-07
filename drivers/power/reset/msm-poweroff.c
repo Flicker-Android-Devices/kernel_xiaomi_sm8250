@@ -67,6 +67,7 @@ static int download_mode = 1;
 static struct kobject dload_kobj;
 
 int in_panic = 0;
+extern int in_long_press;
 static int dload_type = SCM_DLOAD_BOTHDUMPS;
 static void *dload_mode_addr;
 static bool dload_mode_enabled;
@@ -496,13 +497,13 @@ static void msm_restart_prepare(const char *cmd)
 			(restart_mode == RESTART_DLOAD));
 
 	if (qpnp_pon_check_hard_reset_stored()) {
-		/* Set warm reset as true when device is in dload mode */
-		if (get_dload_mode() ||
+		/* Set warm reset as true when device is in dload mode, long press, or edl */
+		if (get_dload_mode() || in_long_press ||
 			((cmd != NULL && cmd[0] != '\0') &&
 			!strcmp(cmd, "edl")))
 			need_warm_reset = true;
 	} else {
-		need_warm_reset = (get_dload_mode() ||
+		need_warm_reset = (get_dload_mode() || in_long_press ||
 				(cmd != NULL && cmd[0] != '\0'));
 	}
 
@@ -515,7 +516,7 @@ static void msm_restart_prepare(const char *cmd)
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
 
-	if (in_panic) {
+	if (in_panic || in_long_press) {
 		qpnp_pon_set_restart_reason(PON_RESTART_REASON_PANIC);
 	} else if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
