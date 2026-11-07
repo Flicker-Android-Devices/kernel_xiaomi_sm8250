@@ -75,6 +75,7 @@ static void *emergency_dload_mode_addr;
 static bool scm_dload_supported;
 
 static bool force_warm_reboot;
+static bool need_warm_reset;
 
 /* interface for exporting attributes */
 struct reset_attribute {
@@ -488,7 +489,7 @@ static void halt_spmi_pmic_arbiter(void)
 
 static void msm_restart_prepare(const char *cmd)
 {
-	bool need_warm_reset = false;
+	need_warm_reset = false;
 	/* Write download mode flags if restart_mode says so
 	 * Kill download mode if master-kill switch is set
 	 */
@@ -497,13 +498,13 @@ static void msm_restart_prepare(const char *cmd)
 			(restart_mode == RESTART_DLOAD));
 
 	if (qpnp_pon_check_hard_reset_stored()) {
-		/* Set warm reset as true when device is in dload mode, long press, or edl */
-		if (get_dload_mode() || in_long_press ||
+		/* Set warm reset as true when device is in dload mode, panic, long press, or edl */
+		if (get_dload_mode() || in_panic || in_long_press ||
 			((cmd != NULL && cmd[0] != '\0') &&
 			!strcmp(cmd, "edl")))
 			need_warm_reset = true;
 	} else {
-		need_warm_reset = (get_dload_mode() || in_long_press ||
+		need_warm_reset = (get_dload_mode() || in_panic || in_long_press ||
 				(cmd != NULL && cmd[0] != '\0'));
 	}
 
@@ -606,10 +607,11 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 	msm_restart_prepare(cmd);
 
 	/*
-	 * Trigger a watchdog bite here and if this fails,
-	 * device will take the usual restart path.
+	 * Trigger a watchdog bite here only if warm reset was not requested.
+	 * If warm reset was requested, skipping the bite allows the system
+	 * to cleanly disable SDI and deassert PS_HOLD, preserving RAM for pstore.
 	 */
-	if (WDOG_BITE_ON_PANIC && in_panic)
+	if (WDOG_BITE_ON_PANIC && in_panic && !(force_warm_reboot || need_warm_reset))
 		msm_trigger_wdog_bite();
 
 	scm_disable_sdi();
