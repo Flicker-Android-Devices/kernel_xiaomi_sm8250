@@ -1176,6 +1176,12 @@ static int longpress_kthread(void *_pon)
 		time_S2 = pon->pon_cfg->s2_timer;
 		time_to_S2 = time_S2 - ktime_ms_delta(ktime_get(), pon->time_kpdpwr_bark);
 
+		/*
+		 * Trigger restart slightly before the hardware S2 timer expires
+		 * (500ms safety window) to prevent PMIC hardware S2 cold reset
+		 * from preempting the warm reset sequence.
+		 */
+		time_to_S2 = max_t(ktime_t, 0, time_to_S2 - 500);
 		if (time_to_S2 > 0)
 			mdelay(time_to_S2);
 
