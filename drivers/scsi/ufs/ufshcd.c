@@ -2186,6 +2186,8 @@ static void ufshcd_panic_ungate_work(struct ufs_hba *hba)
 	ufshcd_hba_vreg_set_hpm(hba);
 	ufshcd_enable_clocks(hba);
 
+	ufshcd_enable_irq(hba);
+
 	/* Exit from hibern8 */
 	if (ufshcd_can_hibern8_during_gating(hba)) {
 	/* Prevent gating in this path */
