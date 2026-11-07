@@ -1031,7 +1031,7 @@ static int longpress_kthread(void *_pon)
 	time_to_S2 = time_S2 - ktime_ms_delta(ktime_get(), pon->time_kpdpwr_bark);
 
 	if (time_to_S2 > 0)
-		msleep(time_to_S2);
+		mdelay(time_to_S2);
 
 	machine_restart(NULL);
 #endif
