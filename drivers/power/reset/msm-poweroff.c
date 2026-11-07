@@ -38,7 +38,7 @@
 #define SCM_DLOAD_FULLDUMP		0X10
 #define SCM_EDLOAD_MODE			0X01
 #define SCM_DLOAD_CMD			0x10
-#define SCM_DLOAD_MINIDUMP		0X20
+#define SCM_DLOAD_MINIDUMP		0X40
 #define SCM_DLOAD_BOTHDUMPS	(SCM_DLOAD_MINIDUMP | SCM_DLOAD_FULLDUMP)
 
 #define DL_MODE_PROP "qcom,msm-imem-download_mode"
@@ -66,8 +66,8 @@ static void scm_disable_sdi(void);
 static int download_mode = 1;
 static struct kobject dload_kobj;
 
-static int in_panic;
-static int dload_type = SCM_DLOAD_FULLDUMP;
+int in_panic = 0;
+static int dload_type = SCM_DLOAD_BOTHDUMPS;
 static void *dload_mode_addr;
 static bool dload_mode_enabled;
 static void *emergency_dload_mode_addr;
@@ -515,7 +515,9 @@ static void msm_restart_prepare(const char *cmd)
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
 
-	if (cmd != NULL) {
+	if (in_panic) {
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_PANIC);
+	} else if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_BOOTLOADER);
@@ -614,6 +616,11 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 	deassert_ps_hold();
 
 	msleep(10000);
+}
+
+void ufs_trigger_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
+{
+	do_msm_restart(reboot_mode, cmd);
 }
 
 static void do_msm_poweroff(void)
