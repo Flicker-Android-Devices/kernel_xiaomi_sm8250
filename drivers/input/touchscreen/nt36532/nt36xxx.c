@@ -1188,6 +1188,7 @@ int switch_pen_input_device(void) {
 	uint8_t buf[8] = {0};
 	int32_t ret = 0;
 	int enable = 0;
+	static int enable_last_status = -1;
 
 	NVT_LOG("++\n");
 	if (!bTouchIsAwake || !ts) {
@@ -1211,8 +1212,20 @@ int switch_pen_input_device(void) {
 	buf[1] = 0x7B;
 	buf[2] = !!enable;
 	ret = CTP_SPI_WRITE(ts->client, buf, 3);
-	if (ret < 0)
+	if (ret < 0) {
 		NVT_ERR("set pen %s failed!\n", enable ? "DISABLE" : "ENABLE");
+		goto nvt_set_pen_enable_out;
+	}
+
+	if (enable_last_status == enable) {
+		NVT_LOG("enable_last_status is %d, enable is %d, skip kobj change\n", enable_last_status, enable);
+		goto nvt_set_pen_enable_out;
+	}
+	enable_last_status = enable;
+
+#ifdef CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
+	update_pen_connect_strategy_value(!!enable);
+#endif //CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
 
 nvt_set_pen_enable_out:
 	mutex_unlock(&ts->pen_switch_lock);
@@ -2446,15 +2459,40 @@ static int nvt_set_cur_value(int nvt_mode, int nvt_value)
 		return 0;
 	} else if (nvt_mode == Touch_Pen_ENABLE && ts && nvt_value >= 0) {
 #if defined(NVT_PEN_CONNECT_STRATEGY)
-		if (!!(nvt_value >> 4))
-			ts->pen_bluetooth_connect = 1;
-		else
-			ts->pen_bluetooth_connect = 0;
+		if (!!(nvt_value >> 4)) {
+			/* connect logic */
+			if ((nvt_value & 0x0F) == 2) {
+				ts->pen_count++;
+			} else if ((nvt_value & 0x0F) == 1) {
+				ts->pen_shield_flag = 1; // shield K81P
+				NVT_LOG("Xiaomi stylus Generation one connect, sheild pen connection");
+			}
+		} else {
+			/* disconnect logic */
+			if ((nvt_value & 0x0F) == 2) {
+				ts->pen_count--;
+			} else if ((nvt_value & 0x0F) == 1) {
+				ts->pen_shield_flag = 0; // open it
+				NVT_LOG("Xiaomi stylus Generation one disconnect, open pen connection");
+			}
+		}
 
+		if (ts->pen_shield_flag) {
+			/* sheild pen connection */
+			ts->pen_bluetooth_connect = 0;
+		} else {
+			if (!!ts->pen_count) {
+				/* M81P connect num >= 1 */
+				ts->pen_bluetooth_connect = 1;
+			} else {
+				/* M81P connect num = 0 */
+				ts->pen_bluetooth_connect = 0;
+			}
+		}
 		ts->db_wakeup = ts->db_wakeup & 0xFD; /* close off screen short hand by defalut */
 		dsi_panel_doubleclick_enable(!!ts->db_wakeup);
-		NVT_LOG("nvt_value is 0x%02X, pen status is %s, pen id is %d, pen_bluetooth_connect is %d, db_wakeup is 0x%02X",
-					nvt_value, (nvt_value >> 4) ? "connect":"disconnct", nvt_value & 0x0F, ts->pen_bluetooth_connect, ts->db_wakeup);
+		NVT_LOG("nvt_value is 0x%02X, pen status is %s, pen id is %d, pen_bluetooth_connect is %d, pen_count is %d, db_wakeup is 0x%02X",
+					nvt_value, (nvt_value >> 4) ? "connect":"disconnct", nvt_value & 0x0F, ts->pen_bluetooth_connect, ts->pen_count, ts->db_wakeup);
 #endif
 
 		switch_pen_input_device();
@@ -2657,6 +2695,50 @@ nvt_pen_charge_state_change_work_out:
 	NVT_LOG("--\n");
 }
 #endif
+
+static int nvt_power_supply_event(struct notifier_block *nb,
+				  unsigned long event, void *ptr)
+{
+	struct nvt_ts_data *ts =
+	    container_of(nb, struct nvt_ts_data, power_supply_notifier);
+
+	if (ts && &ts->power_supply_work != NULL && ts->event_wq != NULL)
+		queue_work(ts->event_wq, &ts->power_supply_work);
+
+	return 0;
+}
+
+static void nvt_power_supply_work(struct work_struct *work)
+{
+	struct nvt_ts_data *ts =
+		container_of(work, struct nvt_ts_data, power_supply_work);
+	int is_usb_exist = 0;
+	uint8_t buf[3] = {0};
+	int32_t ret;
+
+	mutex_lock(&ts->power_supply_lock);
+	if (bTouchIsAwake) {
+		is_usb_exist = !!power_supply_is_system_supplied();
+		if (is_usb_exist != ts->is_usb_exist || ts->is_usb_exist < 0) {
+			ts->is_usb_exist = is_usb_exist;
+			NVT_ERR("Power_supply_event:%d", is_usb_exist);
+			buf[0] = EVENT_MAP_HOST_CMD;
+			if (is_usb_exist) {
+				NVT_ERR("USB is exist");
+				buf[1] = 0x53;
+			} else {
+				NVT_ERR("USB is not exist");
+				buf[1] = 0x51;
+			}
+			buf[2] = 0x00;
+			ret = CTP_SPI_WRITE(ts->client, buf, 3);
+			if (ret) {
+				NVT_ERR("USB status set failed, ret = %d!", ret);
+			}
+		}
+	}
+	mutex_unlock(&ts->power_supply_lock);
+}
 
 static void get_lockdown_info(struct work_struct *work)
 {
@@ -3257,6 +3339,8 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	ts->pen_bluetooth_connect = 0;
 	ts->pen_charge_connect = false;
 	ts->game_mode_enable = 0;
+	ts->pen_count = 0;
+	ts->pen_shield_flag = 0;
 	mutex_init(&ts->pen_switch_lock);
 	INIT_WORK(&ts->pen_charge_state_change_work, nvt_pen_charge_state_change_work);
 	ts->pen_charge_state_notifier.notifier_call = nvt_pen_charge_state_notifier_callback;
@@ -3267,6 +3351,17 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	}
 
 #endif
+
+	/* is usb exit init */
+	ts->is_usb_exist = -1;
+	mutex_init(&ts->power_supply_lock);
+	INIT_WORK(&ts->power_supply_work, nvt_power_supply_work);
+	ts->power_supply_notifier.notifier_call = nvt_power_supply_event;
+	ret = power_supply_reg_notifier(&ts->power_supply_notifier);
+	if (ret) {
+		NVT_ERR("register power_supply_notifier failed. ret=%d\n", ret);
+		goto err_register_power_supply_notif_failed;
+	}
 
 #if defined(CONFIG_DRM_PANEL)
 	ts->drm_panel_notif.notifier_call = nvt_drm_panel_notifier_callback;
@@ -3328,6 +3423,8 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 
 	return 0;
 
+err_register_power_supply_notif_failed:
+	mutex_destroy(&ts->power_supply_lock);
 #if defined(CONFIG_DRM_PANEL)
 err_register_drm_panel_notif_failed:
 #elif defined(_MSM_DRM_NOTIFY_H_)
@@ -3454,6 +3551,11 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 {
 	NVT_LOG("Removing driver...\n");
 
+	if (ts->power_supply_notifier.notifier_call) {
+		power_supply_unreg_notifier(&ts->power_supply_notifier);
+		ts->power_supply_notifier.notifier_call = NULL;
+	}
+
 #if defined(CONFIG_DRM_PANEL)
 	if (active_panel) {
 		if (mi_drm_unregister_client(&ts->drm_panel_notif))
@@ -3484,6 +3586,7 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 		NVT_ERR("Error occurred while unregistering pen status switch state notifier.\n");
 #endif
 	mutex_destroy(&ts->pen_switch_lock);
+	mutex_destroy(&ts->power_supply_lock);
 	destroy_workqueue(ts->event_wq);
 	ts->event_wq = NULL;
 
@@ -3563,6 +3666,11 @@ static void nvt_ts_shutdown(struct spi_device *client)
 
 	nvt_irq_enable(false);
 
+	if (ts->power_supply_notifier.notifier_call) {
+		power_supply_unreg_notifier(&ts->power_supply_notifier);
+		ts->power_supply_notifier.notifier_call = NULL;
+	}
+
 #if defined(CONFIG_DRM_PANEL)
 	if (active_panel) {
 		if (mi_drm_unregister_client(&ts->drm_panel_notif))
@@ -3593,6 +3701,7 @@ static void nvt_ts_shutdown(struct spi_device *client)
 		NVT_ERR("Error occurred while unregistering pen status switch state notifier.\n");
 #endif
 	mutex_destroy(&ts->pen_switch_lock);
+	mutex_destroy(&ts->power_supply_lock);
 	destroy_workqueue(ts->event_wq);
 	ts->event_wq = NULL;
 
@@ -3815,6 +3924,9 @@ static int32_t nvt_ts_resume(struct device *dev)
 	bTouchIsAwake = 1;
 
 	mutex_unlock(&ts->lock);
+
+	ts->is_usb_exist = -1;
+	queue_work(ts->event_wq, &ts->power_supply_work);
 
 	dsi_panel_doubleclick_enable(!!ts->db_wakeup);/*if true, dbclick work until next suspend*/
 	if (likely(ts->ic_state == NVT_IC_RESUME_IN)) {
