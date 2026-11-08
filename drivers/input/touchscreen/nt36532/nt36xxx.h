@@ -163,6 +163,10 @@ struct nvt_ts_data {
 	struct input_dev *input_dev;
 	struct delayed_work nvt_fwu_work;
 	struct delayed_work nvt_lockdown_work;
+	struct mutex power_supply_lock;
+	struct work_struct power_supply_work;
+	struct notifier_block power_supply_notifier;
+	int is_usb_exist;
 	int db_wakeup;
 #if defined(NVT_PEN_CONNECT_STRATEGY)
 	struct work_struct pen_charge_state_change_work;
@@ -171,6 +175,8 @@ struct nvt_ts_data {
 	bool pen_charge_connect;
 	bool game_mode_enable;
 	struct device *dev;
+	int pen_count;
+	bool pen_shield_flag;
 #endif
 	struct mutex pen_switch_lock;
 	int ic_state;
