@@ -4050,6 +4050,11 @@ static int sde_plane_atomic_set_property(struct drm_plane *plane,
 				fod_val = 1;
 			}
 
+			if (val & FOD_ANIM_LAYER_ZORDER) {
+				val &= ~FOD_ANIM_LAYER_ZORDER;
+				fod_val = 1;
+			}
+
 			fod_property = psde->property_info.
 					property_array[PLANE_PROP_FOD];
 			ret = msm_property_atomic_set(&psde->property_info,

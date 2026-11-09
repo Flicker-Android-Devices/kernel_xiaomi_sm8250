@@ -43,6 +43,7 @@
 #include "sde_core_perf.h"
 #include "sde_trace.h"
 #include "xiaomi_frame_stat.h"
+#include "dsi_display.h"
 
 #define SDE_PSTATES_MAX (SDE_STAGE_MAX * 4)
 #define SDE_MULTIRECT_PLANE_MAX (SDE_STAGE_MAX * 2)
@@ -1528,6 +1529,10 @@ static void _sde_crtc_blend_setup_mixer(struct drm_crtc *crtc,
 		for (i = 0; i < cstate->num_dim_layers; i++)
 			_sde_crtc_setup_dim_layer_cfg(crtc, sde_crtc,
 					mixer, &cstate->dim_layer[i]);
+
+		if (cstate->fod_dim_layer)
+			_sde_crtc_setup_dim_layer_cfg(crtc, sde_crtc,
+					mixer, cstate->fod_dim_layer);
 	}
 
 	_sde_crtc_program_lm_output_roi(crtc);
@@ -3318,6 +3323,8 @@ static void sde_crtc_atomic_begin(struct drm_crtc *crtc,
 
 		cstate = to_sde_crtc_state(crtc->state);
 		fod_sync_info = sde_crtc_get_mi_fod_sync_info(cstate);
+		if (!fod_sync_info && cstate->mi_dimlayer_type)
+			fod_sync_info = cstate->mi_dimlayer_type;
 		sde_crtc->mi_dimlayer_type = fod_sync_info;
 
 		sde_cp_crtc_apply_properties(crtc);
@@ -3729,6 +3736,8 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	idle_pc_state = sde_crtc_get_property(cstate, CRTC_PROP_IDLE_PC_STATE);
 
 	fod_sync_info = sde_crtc_get_mi_fod_sync_info(cstate);
+	if (!fod_sync_info && cstate->mi_dimlayer_type)
+		fod_sync_info = cstate->mi_dimlayer_type;
 	_sde_crtc_mi_update_state(cstate, fod_sync_info);
 
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
@@ -3891,6 +3900,8 @@ static struct drm_crtc_state *sde_crtc_duplicate_state(struct drm_crtc *crtc)
 
 	/* clear destination scaler dirty bit */
 	cstate->ds_dirty = false;
+	cstate->mi_dimlayer_type = old_cstate->mi_dimlayer_type;
+	cstate->fod_dim_layer = NULL;
 
 	/* duplicate base helper */
 	__drm_atomic_helper_crtc_duplicate_state(crtc, &cstate->base);
@@ -4884,6 +4895,118 @@ static int _sde_crtc_check_zpos(struct drm_crtc_state *state,
 	return rc;
 }
 
+static struct sde_hw_dim_layer* sde_crtc_setup_fod_dim_layer(
+		struct sde_crtc_state *cstate,
+		uint32_t stage)
+{
+	struct drm_crtc_state *crtc_state = &cstate->base;
+	struct drm_display_mode *mode = &crtc_state->adjusted_mode;
+	struct sde_hw_dim_layer *dim_layer = NULL;
+	struct dsi_display *display;
+	struct sde_kms *kms;
+	uint32_t layer_stage;
+	uint32_t alpha;
+
+	kms = _sde_crtc_get_kms(crtc_state->crtc);
+	if (!kms || !kms->catalog) {
+		SDE_ERROR("Invalid kms\n");
+		goto error;
+	}
+
+	display = get_main_display();
+	if (!display || !display->panel) {
+		SDE_ERROR("Invalid primary display\n");
+		goto error;
+	}
+
+	/*
+	 * LHBM panels (e.g. Psyche 12X) and panels without dimlayer implementation
+	 * must NOT allocate a hardware dim layer.
+	 */
+	if (display->panel->mi_cfg.local_hbm_enabled ||
+	    !display->panel->mi_cfg.fod_dimlayer_enabled)
+		return NULL;
+
+	mutex_lock(&display->panel->panel_lock);
+	alpha = dsi_panel_get_fod_dim_alpha(display->panel);
+	mutex_unlock(&display->panel->panel_lock);
+
+	if (!alpha)
+		return NULL;
+
+	layer_stage = SDE_STAGE_0 + stage;
+	if (layer_stage >= kms->catalog->mixer[0].sblk->maxblendstages) {
+		SDE_ERROR("Stage too large %u vs max %u\n", layer_stage,
+			kms->catalog->mixer[0].sblk->maxblendstages);
+		goto error;
+	}
+
+	if (cstate->num_dim_layers == SDE_MAX_DIM_LAYERS) {
+		SDE_ERROR("Max dim layers reached\n");
+		goto error;
+	}
+
+	dim_layer = &cstate->dim_layer[cstate->num_dim_layers];
+	dim_layer->flags = SDE_DRM_DIM_LAYER_INCLUSIVE;
+	dim_layer->stage = layer_stage;
+	dim_layer->rect.x = 0;
+	dim_layer->rect.y = 0;
+	dim_layer->rect.w = mode->hdisplay;
+	dim_layer->rect.h = mode->vdisplay;
+	dim_layer->color_fill =
+			(struct sde_mdss_color) {0, 0, 0, alpha};
+
+error:
+	return dim_layer;
+}
+
+static void sde_crtc_fod_atomic_check(struct sde_crtc_state *cstate,
+		struct plane_state *pstates, int cnt)
+{
+	struct dsi_display *display;
+	uint32_t dim_layer_stage;
+	int plane_idx;
+	bool has_fod = false;
+
+	for (plane_idx = 0; plane_idx < cnt; plane_idx++) {
+		if (sde_plane_is_fod_layer(pstates[plane_idx].drm_pstate)) {
+			has_fod = true;
+			break;
+		}
+	}
+
+	display = get_main_display();
+
+	if (!has_fod) {
+		cstate->fod_dim_layer = NULL;
+		cstate->mi_dimlayer_type = 0;
+		return;
+	}
+
+	/* Bridge to Xiaomi native mi_dimlayer_type */
+	cstate->mi_dimlayer_type = MI_DIMLAYER_FOD_HBM_OVERLAY |
+				   MI_DIMLAYER_FOD_ICON |
+				   MI_LAYER_FOD_ANIM;
+
+	if (display && display->panel && display->panel->mi_cfg.local_hbm_enabled) {
+		/* Local HBM: skip DPU dim layer */
+		cstate->fod_dim_layer = NULL;
+		return;
+	}
+
+	dim_layer_stage = pstates[plane_idx].stage;
+	cstate->fod_dim_layer = sde_crtc_setup_fod_dim_layer(cstate,
+			dim_layer_stage);
+
+	if (!cstate->fod_dim_layer)
+		return;
+
+	for (plane_idx = 0; plane_idx < cnt; plane_idx++) {
+		if (pstates[plane_idx].stage >= dim_layer_stage)
+			pstates[plane_idx].stage++;
+	}
+}
+
 static int _sde_crtc_atomic_check_pstates(struct drm_crtc *crtc,
 		struct drm_crtc_state *state,
 		struct plane_state *pstates,
@@ -4912,6 +5035,8 @@ static int _sde_crtc_atomic_check_pstates(struct drm_crtc *crtc,
 			plane, multirect_plane, &cnt);
 	if (rc)
 		return rc;
+
+	sde_crtc_fod_atomic_check(cstate, pstates, cnt);
 
 	/* assign mixer stages based on sorted zpos property */
 	rc = _sde_crtc_check_zpos(state, sde_crtc, pstates, cstate, mode, cnt);

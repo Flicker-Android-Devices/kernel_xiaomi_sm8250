@@ -898,6 +898,48 @@ u32 dsi_panel_get_backlight(struct dsi_panel *panel)
 	return panel->bl_config.bl_level;
 }
 
+static u32 interpolate(uint32_t x, uint32_t xa, uint32_t xb, uint32_t ya, uint32_t yb)
+{
+	return ya - (ya - yb) * (x - xa) / (xb - xa);
+}
+
+u32 dsi_panel_get_fod_dim_alpha(struct dsi_panel *panel)
+{
+	struct dsi_panel_mi_cfg *mi_cfg;
+	u32 brightness;
+	int i, level;
+
+	if (!panel)
+		return 0;
+
+	brightness = panel->bl_config.bl_level;
+	mi_cfg = &panel->mi_cfg;
+	level = mi_cfg->brightnes_alpha_lut_item_count;
+
+	if (!mi_cfg->brightness_alpha_lut || level == 0)
+		return 0;
+
+	if (brightness == 0x0)
+		return mi_cfg->brightness_alpha_lut[0].alpha;
+
+	for (i = 0; i < level; i++) {
+		if (mi_cfg->brightness_alpha_lut[i].brightness >= brightness)
+			break;
+	}
+
+	if (i == 0)
+		return mi_cfg->brightness_alpha_lut[0].alpha;
+
+	if (i == level)
+		return mi_cfg->brightness_alpha_lut[level - 1].alpha;
+
+	return interpolate(brightness,
+			mi_cfg->brightness_alpha_lut[i - 1].brightness,
+			mi_cfg->brightness_alpha_lut[i].brightness,
+			mi_cfg->brightness_alpha_lut[i - 1].alpha,
+			mi_cfg->brightness_alpha_lut[i].alpha);
+}
+
 int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 {
 	int rc = 0;
