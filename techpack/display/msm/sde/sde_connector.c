@@ -1049,8 +1049,12 @@ static int _sde_connector_mi_dimlayer_hbm_fence(struct drm_connector *connector)
 				if (mi_cfg->delay_before_fod_hbm_on)
 					sde_encoder_wait_for_event(c_conn->encoder, MSM_ENC_VBLANK);
 
-				if (mi_cfg->fod_dimlayer_enabled)
+				if (mi_cfg->fod_dimlayer_enabled) {
 					sde_connector_hbm_ctl(connector, DISPPARAM_HBM_FOD_ON);
+				} else if (mi_cfg->local_hbm_enabled) {
+					mi_cfg->pending_lhbm_state = 1;
+					mi_disp_set_fod_queue_work(1, false);
+				}
 
 				/* Send crc off cmd before delay only if DC off(MIUI-1755728) */
 				if (mi_cfg->dc_type == 2) {
@@ -1089,7 +1093,10 @@ static int _sde_connector_mi_dimlayer_hbm_fence(struct drm_connector *connector)
 					mi_cfg->sysfs_fod_unlock_success);
 			if (mi_cfg->delay_before_fod_hbm_off)
 				sde_encoder_wait_for_event(c_conn->encoder, MSM_ENC_VBLANK);
-			sde_connector_hbm_ctl(connector, DISPPARAM_HBM_FOD_OFF);
+			if (mi_cfg->fod_dimlayer_enabled)
+				sde_connector_hbm_ctl(connector, DISPPARAM_HBM_FOD_OFF);
+			else if (mi_cfg->local_hbm_enabled)
+				mi_disp_set_fod_queue_work(0, false);
 			if (mi_cfg->dc_type)
 				sysfs_notify(&c_conn->bl_device->dev.kobj, NULL, "brightness_clone");
 			if (mi_cfg->delay_after_fod_hbm_off)
