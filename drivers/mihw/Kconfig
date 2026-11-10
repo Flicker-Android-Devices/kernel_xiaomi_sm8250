@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menu "Xiaomi Hardware (MIHW) Drivers"
+
+config MI_PERFMGR
+	bool "Frame Energy Aware Scheduling (FEAS)"
+	default n
+	help
+	  Xiaomi FEAS (Frame Energy Aware Scheduling) performance manager.
+	  Monitors per-frame rendering budgets via /proc/perfmgr/perf_ioctl
+	  and dynamically adjusts CPU frequencies to prevent frame drops
+	  while minimizing energy consumption.
+
+config MI_PERFMGR_GPU
+	bool "FEAS GPU Frame Modulation (IFFM)"
+	depends on MI_PERFMGR
+	default n
+	help
+	  Instantaneous Frame Frequency Modulation for GPU (IFFM).
+	  Coordinates GPU frequencies with frame rendering budgets to
+	  rescue dropped frames and conserve GPU energy.
+
+endmenu
