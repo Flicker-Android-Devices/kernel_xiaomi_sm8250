@@ -7,6 +7,9 @@
 #include <linux/devfreq_cooling.h>
 #include <linux/slab.h>
 #include <linux/msm_kgsl.h>
+#if IS_ENABLED(CONFIG_MI_PERFMGR_GPU)
+#include <linux/mi_perfmgr.h>
+#endif
 
 #include "kgsl_device.h"
 #include "kgsl_pwrscale.h"
@@ -525,6 +528,9 @@ int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags)
 	int level;
 	unsigned int i;
 	unsigned long cur_freq, rec_freq;
+#if IS_ENABLED(CONFIG_MI_PERFMGR_GPU)
+	bool check_return = false;
+#endif
 
 	if (device == NULL)
 		return -ENODEV;
@@ -544,6 +550,9 @@ int kgsl_devfreq_target(struct device *dev, unsigned long *freq, u32 flags)
 	}
 
 	rec_freq = *freq;
+#if IS_ENABLED(CONFIG_MI_PERFMGR_GPU)
+	perfmgr_get_gpu_hook(&rec_freq, &check_return);
+#endif
 
 	mutex_lock(&device->mutex);
 	cur_freq = kgsl_pwrctrl_active_freq(pwr);
@@ -920,6 +929,20 @@ static int opp_notify(struct notifier_block *nb,
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_MI_PERFMGR_GPU)
+static int kgsl_feas_notify_update(bool need_update)
+{
+	struct kgsl_device *device = kgsl_get_device(KGSL_DEVICE_3D0);
+
+	if (device && device->pwrscale.enabled && device->pwrscale.devfreq_wq) {
+		if (device->state != KGSL_STATE_SLUMBER)
+			queue_work(device->pwrscale.devfreq_wq,
+				   &device->pwrscale.devfreq_notify_ws);
+		return 0;
+	}
+	return -ENODEV;
+}
+#endif
 
 /*
  * kgsl_pwrscale_init - Initialize pwrscale.
@@ -1084,6 +1107,10 @@ int kgsl_pwrscale_init(struct device *dev, const char *governor)
 	INIT_WORK(&pwrscale->devfreq_suspend_ws, do_devfreq_suspend);
 	INIT_WORK(&pwrscale->devfreq_resume_ws, do_devfreq_resume);
 	INIT_WORK(&pwrscale->devfreq_notify_ws, do_devfreq_notify);
+#if IS_ENABLED(CONFIG_MI_PERFMGR_GPU)
+	get_perfmgr_devfreq(devfreq);
+	perfmgr_notify_gpu_freq_fp = kgsl_feas_notify_update;
+#endif
 	if (kgsl_midframe)
 		INIT_WORK(&kgsl_midframe->timer_check_ws,
 				kgsl_pwrscale_midframe_timer_check);
@@ -1127,6 +1154,9 @@ void kgsl_pwrscale_close(struct kgsl_device *device)
 	pwrscale = &device->pwrscale;
 	if (!pwrscale->devfreqptr)
 		return;
+#if IS_ENABLED(CONFIG_MI_PERFMGR_GPU)
+	perfmgr_notify_gpu_freq_fp = NULL;
+#endif
 	if (pwrscale->cooling_dev)
 		devfreq_cooling_unregister(pwrscale->cooling_dev);
 
