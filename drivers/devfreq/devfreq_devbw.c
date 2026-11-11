@@ -24,6 +24,11 @@
 #include <linux/msm-bus.h>
 #include <linux/msm-bus-board.h>
 
+#if IS_ENABLED(CONFIG_MI_PERFMGR)
+extern void perfmgr_register_ddr_devfreq(struct devfreq *df);
+extern void perfmgr_register_llcc_devfreq(struct devfreq *df);
+#endif
+
 /* Has to be ULL to prevent overflow where this macro is used. */
 #define MBYTE (1ULL << 20)
 #define MAX_PATHS	2
@@ -178,6 +183,13 @@ int devfreq_add_devbw(struct device *dev)
 		msm_bus_scale_unregister_client(d->bus_client);
 		return PTR_ERR(d->df);
 	}
+
+#if IS_ENABLED(CONFIG_MI_PERFMGR)
+	if (of_device_is_compatible(dev->of_node, "qcom,devbw-ddr"))
+		perfmgr_register_ddr_devfreq(d->df);
+	else if (of_device_is_compatible(dev->of_node, "qcom,devbw"))
+		perfmgr_register_llcc_devfreq(d->df);
+#endif
 
 	return 0;
 }

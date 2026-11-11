@@ -227,6 +227,28 @@ extern void devm_devfreq_unregister_notifier(struct device *dev,
 				unsigned int list);
 extern struct devfreq *devfreq_get_devfreq_by_phandle(struct device *dev,
 						int index);
+#if IS_ENABLED(CONFIG_MI_PERFMGR)
+extern int update_devfreq(struct devfreq *devfreq);
+#if defined(CONFIG_OF)
+extern struct devfreq *devfreq_get_devfreq_by_node(struct device_node *node);
+#endif
+extern struct devfreq *devfreq_get_devfreq_by_name(const char *name);
+#else
+static inline int update_devfreq(struct devfreq *devfreq)
+{
+	return -ENODEV;
+}
+#if defined(CONFIG_OF)
+static inline struct devfreq *devfreq_get_devfreq_by_node(struct device_node *node)
+{
+	return ERR_PTR(-ENODEV);
+}
+#endif
+static inline struct devfreq *devfreq_get_devfreq_by_name(const char *name)
+{
+	return ERR_PTR(-ENODEV);
+}
+#endif /* CONFIG_MI_PERFMGR */
 
 #if IS_ENABLED(CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND)
 /**
