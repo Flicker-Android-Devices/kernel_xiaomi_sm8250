@@ -841,6 +841,68 @@ struct devfreq *devfreq_get_devfreq_by_phandle(struct device *dev, int index)
 #endif /* CONFIG_OF */
 EXPORT_SYMBOL_GPL(devfreq_get_devfreq_by_phandle);
 
+#if IS_ENABLED(CONFIG_MI_PERFMGR)
+#if defined(CONFIG_OF)
+/**
+ * devfreq_get_devfreq_by_node() - Retrieve devfreq device by device_node
+ * @node:	device_node of the devfreq device's parent
+ *
+ * Return devfreq dev if found, or ERR_PTR() on failure.
+ */
+struct devfreq *devfreq_get_devfreq_by_node(struct device_node *node)
+{
+	struct devfreq *devfreq;
+
+	if (!node)
+		return ERR_PTR(-EINVAL);
+
+	mutex_lock(&devfreq_list_lock);
+	list_for_each_entry(devfreq, &devfreq_list, node) {
+		if (devfreq->dev.parent &&
+		    devfreq->dev.parent->of_node == node) {
+			mutex_unlock(&devfreq_list_lock);
+			return devfreq;
+		}
+	}
+	mutex_unlock(&devfreq_list_lock);
+
+	return ERR_PTR(-ENODEV);
+}
+EXPORT_SYMBOL_GPL(devfreq_get_devfreq_by_node);
+#endif /* CONFIG_OF */
+
+/**
+ * devfreq_get_devfreq_by_name() - Retrieve devfreq device by name pattern
+ * @name:	name to match against devfreq device or parent
+ *
+ * Return devfreq dev if found, or ERR_PTR() on failure.
+ */
+struct devfreq *devfreq_get_devfreq_by_name(const char *name)
+{
+	struct devfreq *devfreq;
+
+	if (!name)
+		return ERR_PTR(-EINVAL);
+
+	mutex_lock(&devfreq_list_lock);
+	list_for_each_entry(devfreq, &devfreq_list, node) {
+		if ((devfreq->dev.parent && devfreq->dev.parent->of_node &&
+		     (!strcmp(devfreq->dev.parent->of_node->name, name) ||
+		      strstr(devfreq->dev.parent->of_node->name, name))) ||
+		    (devfreq->dev.parent &&
+		     strstr(dev_name(devfreq->dev.parent), name)) ||
+		    strstr(dev_name(&devfreq->dev), name)) {
+			mutex_unlock(&devfreq_list_lock);
+			return devfreq;
+		}
+	}
+	mutex_unlock(&devfreq_list_lock);
+
+	return ERR_PTR(-ENODEV);
+}
+EXPORT_SYMBOL_GPL(devfreq_get_devfreq_by_name);
+#endif /* CONFIG_MI_PERFMGR */
+
 /**
  * devm_devfreq_remove_device() - Resource-managed devfreq_remove_device()
  * @dev:	the device to add devfreq feature.
