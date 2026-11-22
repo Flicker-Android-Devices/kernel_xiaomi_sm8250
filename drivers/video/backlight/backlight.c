@@ -177,6 +177,9 @@ int backlight_device_set_brightness(struct backlight_device *bd,
 				    unsigned long brightness)
 {
 	int rc = -ENXIO;
+#ifdef CONFIG_MACH_XIAOMI
+	bool silent = false;
+#endif
 
 	mutex_lock(&bd->ops_lock);
 	if (bd->ops) {
@@ -184,21 +187,35 @@ int backlight_device_set_brightness(struct backlight_device *bd,
 			rc = -EINVAL;
 		else {
 #ifdef CONFIG_MACH_XIAOMI
-			if ((!bd->use_count && brightness) || (bd->use_count && !brightness)) {
-				pr_info("%s: set brightness to %lu\n", __func__, brightness);
+			pr_debug("set brightness to %lu\n", brightness);
+			bd->props.brightness = brightness;
+			rc = backlight_update_status(bd);
+			silent = !!(bd->props.state & BL_CORE_SILENT_UPDATE);
+			bd->props.state &= ~BL_CORE_SILENT_UPDATE;
+			if (silent) {
+				bd->usr_brightness_req = bd->props.brightness;
+			} else if ((!bd->use_count && brightness) ||
+				   (bd->use_count && !brightness)) {
+				pr_info("%s: set brightness to %lu\n",
+					__func__, brightness);
 				if (!bd->use_count)
 					bd->use_count++;
 				else
 					bd->use_count--;
 			}
-#endif
+#else
 			pr_debug("set brightness to %lu\n", brightness);
 			bd->props.brightness = brightness;
 			rc = backlight_update_status(bd);
+#endif
 		}
 	}
 	mutex_unlock(&bd->ops_lock);
 
+#ifdef CONFIG_MACH_XIAOMI
+	if (silent)
+		return rc;
+#endif
 	backlight_generate_event(bd, BACKLIGHT_UPDATE_SYSFS);
 
 	return rc;
