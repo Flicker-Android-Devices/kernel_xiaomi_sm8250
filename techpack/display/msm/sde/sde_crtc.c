@@ -1525,9 +1525,21 @@ static void _sde_crtc_blend_setup_mixer(struct drm_crtc *crtc,
 
 	if (lm && lm->ops.setup_dim_layer) {
 		cstate = to_sde_crtc_state(crtc->state);
-		for (i = 0; i < cstate->num_dim_layers; i++)
+		for (i = 0; i < cstate->num_dim_layers; i++) {
+			struct sde_hw_dim_layer dim_layer = cstate->dim_layer[i];
+
+			if (cstate->mi_state.fod_dim_layer_enabled &&
+			    dim_layer.stage >=
+			    cstate->mi_state.fod_dim_layer.stage)
+				dim_layer.stage++;
+
 			_sde_crtc_setup_dim_layer_cfg(crtc, sde_crtc,
-					mixer, &cstate->dim_layer[i]);
+					mixer, &dim_layer);
+		}
+
+		if (cstate->mi_state.fod_dim_layer_enabled)
+			_sde_crtc_setup_dim_layer_cfg(crtc, sde_crtc,
+					mixer, &cstate->mi_state.fod_dim_layer);
 	}
 
 	_sde_crtc_program_lm_output_roi(crtc);
@@ -3891,6 +3903,8 @@ static struct drm_crtc_state *sde_crtc_duplicate_state(struct drm_crtc *crtc)
 
 	/* clear destination scaler dirty bit */
 	cstate->ds_dirty = false;
+	cstate->mi_state.mi_dim_layer = NULL;
+	cstate->mi_state.fod_dim_layer_enabled = false;
 
 	/* duplicate base helper */
 	__drm_atomic_helper_crtc_duplicate_state(crtc, &cstate->base);
@@ -4922,6 +4936,8 @@ static int _sde_crtc_atomic_check_pstates(struct drm_crtc *crtc,
 	if (rc)
 		return rc;
 
+	sde_crtc_mi_atomic_check(sde_crtc, cstate, pstates, cnt);
+
 	/*
 	 * validate and set source split:
 	 * use pstates sorted by stage to check planes on same stage
@@ -5035,152 +5051,191 @@ end:
 	return rc;
 }
 
-static uint32_t get_current_brightness(struct sde_crtc_state *cstate)
+static uint32_t _sde_crtc_get_fod_dim_alpha(struct sde_crtc_state *cstate)
 {
 	int i;
-	uint32_t brightness;
+	uint32_t brightness = 0, alpha = 0;
+
 	for (i = 0; i < cstate->num_connectors; i++) {
-		sde_connector_mi_get_current_backlight(cstate->connectors[i], &brightness);
+		if (!cstate->connectors[i] ||
+		    cstate->connectors[i]->connector_type !=
+				DRM_MODE_CONNECTOR_DSI)
+			continue;
+		sde_connector_mi_get_current_backlight(cstate->connectors[i],
+				&brightness);
+		sde_connector_mi_get_current_alpha(cstate->connectors[i],
+				brightness, &alpha);
+		if (alpha)
+			break;
 	}
-	return brightness;
+
+	return alpha & 0xFF;
 }
 
-static uint32_t get_current_alpha(struct sde_crtc_state *cstate, uint32_t brightness)
+static bool _sde_crtc_mi_is_fullscreen_alpha_plane(
+		const struct drm_plane_state *drm_pstate,
+		const struct drm_display_mode *mode)
 {
-	int i;
-	uint32_t alpha;
-	for (i = 0; i < cstate->num_connectors; i++) {
-		sde_connector_mi_get_current_alpha(cstate->connectors[i], brightness, &alpha);
-	}
-	return alpha;
+	const struct msm_format *msm_fmt;
+	const struct sde_format *fmt;
+
+	if (!drm_pstate || !drm_pstate->fb || !mode ||
+	    mode->hdisplay <= 0 || mode->vdisplay <= 0)
+		return false;
+
+	if (drm_pstate->crtc_x != 0 || drm_pstate->crtc_y != 0 ||
+	    drm_pstate->crtc_w != (uint32_t)mode->hdisplay ||
+	    drm_pstate->crtc_h != (uint32_t)mode->vdisplay)
+		return false;
+
+	msm_fmt = msm_framebuffer_format(drm_pstate->fb);
+	if (!msm_fmt)
+		return false;
+
+	fmt = to_sde_format(msm_fmt);
+	return fmt->alpha_enable;
 }
 
-static uint32_t _sde_crtc_config_mi_dim_layer_lapha(struct sde_crtc_state *cstate)
+static bool _sde_crtc_config_mi_dim_layer(struct sde_crtc_state *cstate,
+		struct drm_crtc_state *drm_state,
+		uint32_t layer_stage, uint32_t alpha)
 {
-	uint32_t alpha, current_brightness;
-
-	current_brightness = get_current_brightness(cstate);
-	if(cstate->mi_state.dimlayer_backlight_stash == current_brightness)
-		return cstate->mi_state.dimlayer_alpha_stash;
-
-	alpha = get_current_alpha(cstate, current_brightness) & 0x000000FF;
-	cstate->mi_state.dimlayer_backlight_stash = current_brightness;
-	cstate->mi_state.dimlayer_alpha_stash = alpha;
-
-	return alpha;
-}
-
-void _sde_crtc_config_mi_dim_layer(struct sde_crtc *sde_crtc, struct sde_crtc_state *cstate,
-				struct drm_crtc_state *drm_state, uint32_t dim_layer_stage)
-{
-	uint32_t alpha;
-	struct sde_hw_mixer *lm;
-	struct sde_crtc_mixer *mixer;
 	struct drm_display_mode *display_mode = &drm_state->adjusted_mode;
-	alpha = _sde_crtc_config_mi_dim_layer_lapha(cstate);
-	mixer = sde_crtc->mixers;
-	lm = mixer->hw_lm;
+	struct sde_hw_dim_layer *dim_layer;
 
-	cstate->mi_state.mi_dim_layer = cstate->dim_layer;
-	if (lm && lm->ops.setup_dim_layer) {
-		if (cstate->num_dim_layers_bank <= SDE_MAX_DIM_LAYERS) {
-			cstate->dim_layer[cstate->num_dim_layers_bank].flags = SDE_DRM_DIM_LAYER_INCLUSIVE;
-			cstate->dim_layer[cstate->num_dim_layers_bank].stage = dim_layer_stage + SDE_STAGE_0;
-			cstate->dim_layer[cstate->num_dim_layers_bank].rect.x = 0x0;
-			cstate->dim_layer[cstate->num_dim_layers_bank].rect.y = 0x0;
-			cstate->dim_layer[cstate->num_dim_layers_bank].rect.w = display_mode->hdisplay;
-			cstate->dim_layer[cstate->num_dim_layers_bank].rect.h = display_mode->vdisplay;
-			cstate->dim_layer[cstate->num_dim_layers_bank].color_fill = (struct sde_mdss_color) {0x0, 0x0, 0x0, alpha};
-			cstate->num_dim_layers = cstate->num_dim_layers_bank + 1;
-			_sde_crtc_mi_update_state(cstate, MI_DIMLAYER_FOD_ICON);
-		} else {
-			SDE_ERROR("invalid number of dim_layers:%d", cstate->num_dim_layers);
-		}
-	}
+	if (!alpha || display_mode->hdisplay <= 0 || display_mode->vdisplay <= 0)
+		return false;
+
+	dim_layer = &cstate->mi_state.fod_dim_layer;
+	dim_layer->flags = SDE_DRM_DIM_LAYER_INCLUSIVE;
+	dim_layer->stage = layer_stage;
+	dim_layer->rect.x = 0;
+	dim_layer->rect.y = 0;
+	dim_layer->rect.w = display_mode->hdisplay;
+	dim_layer->rect.h = display_mode->vdisplay;
+	dim_layer->color_fill = (struct sde_mdss_color) {0, 0, 0, alpha};
+
+	cstate->mi_state.mi_dim_layer = dim_layer;
+	cstate->mi_state.fod_dim_layer_enabled = true;
+	return true;
 }
 
 int sde_crtc_mi_atomic_check(struct sde_crtc *sde_crtc, struct sde_crtc_state *cstate,
 		void *pstates, int cnt)
 {
-	uint32_t i;
-	uint32_t mi_plane;
-
-	uint32_t dim_layer_stage = 0x0;
-	uint32_t mi_aodlayer_index = 0x0;
-	uint32_t mi_iconlayer_index = 0x0;
-	uint32_t mi_pressed_Iconlayer_index = 0x0;
-	bool mi_dimlayer_switch_enable = true;
-	int max_stage = 0;
 	struct plane_state *pstates_ = (struct plane_state *)pstates;
+	struct drm_display_mode *mode;
+	struct sde_kms *kms;
+	uint32_t fod_sync_info;
+	uint32_t alpha;
+	uint32_t stage_offset;
+	uint32_t layer_stage;
+	uint32_t max_stages;
+	uint32_t max_zpos;
+	int dim_layer_stage = -1;
+	int max_plane_stage = 0;
+	int i;
 
-	/* dimlayer switch for FOD and DC function */
-	if (!mi_dimlayer_switch_enable)
+	if (!cstate)
 		return 0;
 
+	cstate->mi_state.mi_dim_layer = NULL;
+	cstate->mi_state.fod_dim_layer_enabled = false;
+
+	if (!sde_crtc || !pstates_ || cnt <= 0)
+		return 0;
+
+	kms = _sde_crtc_get_kms(&sde_crtc->base);
+	if (!kms || !kms->catalog || !kms->catalog->mixer_count)
+		return 0;
+
+	fod_sync_info = sde_crtc_get_mi_fod_sync_info(cstate);
+
 	for (i = 0; i < cnt; i++) {
-		mi_plane = sde_plane_get_mi_layer_info(pstates_[i].drm_pstate);
-
-		switch (mi_plane) {
-		case MI_LAYER_FOD_HBM_OVERLAY:
-			mi_pressed_Iconlayer_index = i;
-			break;
-		case MI_LAYER_FOD_ICON:
-			mi_iconlayer_index = i;
-			break;
-		case MI_LAYER_AOD:
-			mi_aodlayer_index = i;
-			break;
-
-		default:
-			break;
+		if (pstates_[i].stage > max_plane_stage)
+			max_plane_stage = pstates_[i].stage;
+		if (sde_plane_get_mi_layer_info(pstates_[i].drm_pstate) ==
+				MI_LAYER_FOD_HBM_OVERLAY) {
+			if (dim_layer_stage < 0 ||
+			    pstates_[i].stage < dim_layer_stage)
+				dim_layer_stage = pstates_[i].stage;
 		}
 	}
 
-	/* Create mi dim layer under index layer */
-	if (mi_pressed_Iconlayer_index > 0) {
-		dim_layer_stage = pstates_[mi_pressed_Iconlayer_index].stage;
-		for (i = 0; i < cnt; i++) {
-			if (pstates_[i].stage >= dim_layer_stage) {
-				pstates_[i].stage++;
-				pstates_[i].sde_pstate->stage++;
-				if (pstates_[i].stage > max_stage)
-					max_stage = pstates_[i].stage;
+	/*
+	 * When HWC only passes CRTC-level mi_fod_sync_info (no plane
+	 * mi_layer_info), locate the topmost full-screen alpha plane (AOSP
+	 * UdfpsSurfaceView) above stage 0, skipping top/bottom decor strips.
+	 */
+	if (dim_layer_stage < 0 &&
+	    (fod_sync_info & MI_DIMLAYER_FOD_HBM_OVERLAY)) {
+		mode = &cstate->base.adjusted_mode;
+
+		for (i = cnt - 1; i >= 0; i--) {
+			if (pstates_[i].stage <= 0)
+				continue;
+			if (_sde_crtc_mi_is_fullscreen_alpha_plane(
+					pstates_[i].drm_pstate, mode)) {
+				dim_layer_stage = pstates_[i].stage;
+				break;
 			}
 		}
 
-		/* do not use same stage */
-		for (i = 0; i < cstate->num_dim_layers; i++) {
-			if (cstate->dim_layer[i].stage >= dim_layer_stage &&
-				cstate->dim_layer[i].stage <= max_stage)
-				cstate->dim_layer[i].stage++;
-		}
-	} else if ((mi_iconlayer_index > 0)) {
-		for (i = 0; i < cnt; i++) {
-			if (pstates_[i].stage > dim_layer_stage)
-				dim_layer_stage = pstates_[i].stage;
-		}
-
-		/* do not use same stage */
-		for (i = 0; i < cstate->num_dim_layers; i++) {
-			if (cstate->dim_layer[i].stage > dim_layer_stage )
-				cstate->dim_layer[i].stage = dim_layer_stage++;
-		}
-
-		dim_layer_stage++;
+		if (dim_layer_stage < 0 && pstates_[cnt - 1].stage > 0)
+			dim_layer_stage = pstates_[cnt - 1].stage;
 	}
 
-	if (dim_layer_stage > SDE_STAGE_MAX - SDE_STAGE_0) {
-		SDE_ERROR(" > %d plane stages assigned\n", SDE_STAGE_MAX - SDE_STAGE_0);
+	if (dim_layer_stage <= 0)
 		return 0;
-	 }
 
-	if (dim_layer_stage > 0x0 && cstate->mi_state.mi_dim_layer == NULL) {
-		SDE_ATRACE_BEGIN("dimlayer_show");
-		_sde_crtc_config_mi_dim_layer(sde_crtc, cstate, &cstate->base, dim_layer_stage);
+	alpha = _sde_crtc_get_fod_dim_alpha(cstate);
+	if (!alpha)
+		return 0;
+
+	stage_offset = kms->catalog->has_base_layer ? 0 : SDE_STAGE_0;
+	layer_stage = (uint32_t)dim_layer_stage + stage_offset;
+	max_stages = kms->catalog->mixer[0].sblk->maxblendstages;
+	max_zpos = SDE_STAGE_MAX - SDE_STAGE_0;
+
+	if (!max_stages || layer_stage == SDE_STAGE_BASE ||
+	    layer_stage > max_stages ||
+	    (uint32_t)max_plane_stage + 1 >= max_zpos ||
+	    (uint32_t)max_plane_stage + stage_offset + 1 > max_stages ||
+	    (uint32_t)max_plane_stage + stage_offset + 1 >= SDE_STAGE_MAX) {
+		SDE_ERROR("mi dim layer stage overflow: dim=%u max_plane=%d max=%u\n",
+			layer_stage, max_plane_stage, max_stages);
+		return 0;
+	}
+
+	if (cstate->num_dim_layers >= SDE_MAX_DIM_LAYERS) {
+		SDE_ERROR("mi dim layer skipped: max dim layers %u reached\n",
+			cstate->num_dim_layers);
+		return 0;
+	}
+
+	for (i = 0; i < cstate->num_dim_layers; i++) {
+		if (cstate->dim_layer[i].stage >= layer_stage &&
+		    (cstate->dim_layer[i].stage >= max_stages ||
+		     cstate->dim_layer[i].stage + 1 >= SDE_STAGE_MAX)) {
+			SDE_ERROR("mi dim layer skipped: user dim[%d] stage %u overflow\n",
+				i, cstate->dim_layer[i].stage);
+			return 0;
+		}
+	}
+
+	SDE_ATRACE_BEGIN("dimlayer_show");
+	if (!_sde_crtc_config_mi_dim_layer(cstate, &cstate->base,
+			layer_stage, alpha)) {
 		SDE_ATRACE_END("dimlayer_show");
-	} else {
-		cstate->mi_state.mi_dim_layer = NULL;
-		_sde_crtc_mi_update_state(cstate, MI_DIMLAYER_NULL);
+		return 0;
+	}
+	SDE_ATRACE_END("dimlayer_show");
+
+	for (i = 0; i < cnt; i++) {
+		if (pstates_[i].stage >= dim_layer_stage) {
+			pstates_[i].stage++;
+			pstates_[i].sde_pstate->stage++;
+		}
 	}
 
 	return 0;

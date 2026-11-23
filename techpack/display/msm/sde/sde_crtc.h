@@ -428,6 +428,8 @@ typedef struct sde_crtc_mi_layer
  */
 struct sde_crtc_mi_state {
 	struct sde_hw_dim_layer *mi_dim_layer;
+	struct sde_hw_dim_layer fod_dim_layer;
+	bool fod_dim_layer_enabled;
 	struct sde_crtc_mi_layer mi_layer;
 	uint32_t dimlayer_backlight_stash;
 	uint8_t  dimlayer_alpha_stash;

@@ -3984,6 +3984,7 @@ void sde_connector_mi_get_current_alpha(struct drm_connector *connector, uint32_
 	struct dsi_display *display = NULL;
 	struct dsi_bridge *c_bridge = NULL;
 	struct dsi_panel_mi_cfg *mi_cfg = NULL;
+	uint32_t level, lut_max_bl, lut_min_alpha;
 
 	if (!connector || !connector->encoder || !connector->encoder->bridge) {
 		SDE_ERROR("Invalid connector/encoder/bridge ptr\n");
@@ -3998,6 +3999,26 @@ void sde_connector_mi_get_current_alpha(struct drm_connector *connector, uint32_
 	}
 
 	mi_cfg = &display->panel->mi_cfg;
+	if (!mi_cfg->fod_dimlayer_enabled || mi_cfg->local_hbm_enabled ||
+	    !mi_cfg->brightness_alpha_lut ||
+	    !mi_cfg->brightnes_alpha_lut_item_count) {
+		*alpha = 0;
+		return;
+	}
+
+	level = mi_cfg->brightnes_alpha_lut_item_count;
+	lut_max_bl = mi_cfg->brightness_alpha_lut[level - 1].brightness;
+	if (brightness > lut_max_bl &&
+	    display->panel->bl_config.brightness_max_level > lut_max_bl &&
+	    lut_max_bl < 3000) {
+		lut_min_alpha = mi_cfg->brightness_alpha_lut[level - 1].alpha;
+		if (brightness >= 3000)
+			*alpha = 0;
+		else
+			*alpha = interpolate(brightness, lut_max_bl, 3000,
+					     lut_min_alpha, 0);
+		return;
+	}
 
 	*alpha = brightness_to_alpha(mi_cfg, brightness);
 	return;
